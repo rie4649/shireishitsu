@@ -1,6 +1,6 @@
 {
-  "name": "スタック司令室",
-  "short_name": "司令室",
+  "name": "スタック",
+  "short_name": "スタック",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
