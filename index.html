@@ -284,7 +284,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "2.5";
+const PAGE_VER = "2.7";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -366,16 +366,20 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   const setMouth = (open) => mouth.setAttribute("ry", open ? (3 + Math.random() * 4).toFixed(1) : "1.2");
   const eyes = $("eyes");
   setInterval(() => { eyes.setAttribute("transform", "translate(0 40) scale(1 .1) translate(0 -40)"); setTimeout(() => eyes.removeAttribute("transform"), 140); }, 4200);
+  let speakTok = 0;
   function speakAloud(text) {
     if (!("speechSynthesis" in window) || !text) return;
     if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
     speechSynthesis.resume();
     const u = new SpeechSynthesisUtterance(text.replace(/…+/g, "、"));
     u.lang = "ja-JP"; u.rate = 1.05; u.pitch = 1.35;
-    const v = speechSynthesis.getVoices().find((x) => x.lang && x.lang.startsWith("ja")); if (v) u.voice = v;
+    const v = speechSynthesis.getVoices().find((x) => x.lang && x.lang.startsWith("ja")); if (v && v.localService !== false) u.voice = v;
     let flap = null;
     u.onstart = () => { flap = setInterval(() => setMouth(Math.random() > .35), 110); };
-    u.onend = u.onerror = () => { clearInterval(flap); setMouth(false); };
+    const tok = ++speakTok, done = () => { clearInterval(flap); setMouth(false); if (tok === speakTok && typeof micPause === "function") micPause(false); };
+    u.onend = u.onerror = done;
+    setTimeout(done, 4000 + text.length * 350); // 終わりの合図が来ない端末の保険
+    if (typeof micPause === "function") micPause(true);
     speechSynthesis.speak(u);
   }
 
@@ -582,6 +586,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     closeKeyboard();
     micPause(true);
     convoAdd("あなた(文字)", text);
+    maybeResearch(text);
     if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel(); // iPhoneは止めた直後の読み上げが消えることがある
     const line = $("optSay").checked ? `『${text}』って言って` : text;
     try {
@@ -593,7 +598,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
       }
       $("talkSt").textContent = "▸ 送話中";
       if (!(await utter(line))) { $("talkSt").textContent = "▸ 声が出ないみたい。消音スイッチと音量を確認してね"; return; }
-      $("talkSt").textContent = "▸ 送信完了。スタックの返事を聞いてね";
+      $("talkSt").textContent = micOn ? "▸ 送信完了。スタックの返事を聞き取るね" : "▸ 送信完了。スタックの声の返事も画面に出すなら MIC をオンにしてね";
       $("talkIn").value = "";
     } finally {
       talking = false; $("talkGo").disabled = false;
@@ -706,7 +711,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
 
   /* ---------------- MIC: スマホのマイクで会話を聞き取って画面に出す ---------------- */
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const WAKE_RE = /スタック|すたっく|ｽﾀｯｸ|stack/i;
+  const WAKE_HEAD = /^(ねえ|ねぇ|ねー|おーい|おい|あの|あのね|ちょっと|ヘイ|hey|hi)?[、。,!！\s]*(スタック|すたっく|ｽﾀｯｸ|stack)/i;
   let rec = null, micOn = false, micPaused = false, restartT = null;
   const convo = { lines: [], waitUser: 0, waitReply: 0 };
   const hms = () => { const n = jst(); return `${p2(n.getHours())}:${p2(n.getMinutes())}:${p2(n.getSeconds())}`; };
@@ -714,20 +719,25 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     if (!text) return;
     convo.lines.push({ who, text, t: hms() });
     if (convo.lines.length > 14) convo.lines.shift();
-    if (/あなた/.test(who)) convo.waitReply = Date.now() + 25000;
+    if (/あなた/.test(who)) { convo.waitReply = Date.now() + 25000; if (!/調べ|しらべ/.test(text)) pageAnswer(text); }
     const last = convo.lines[convo.lines.length - 1], data = {};
-    convo.lines.slice(0, -1).reverse().forEach((l) => { data[`${l.t} ${l.who}`] = l.text; });
+    convo.lines.slice(0, -1).reverse().forEach((l) => { let k = `${l.t} ${l.who}`; while (k in data) k += " "; data[k] = l.text; });
     show({ id: "convo", time: Date.now(), title: "スタックとの会話", text: `${last.who}：${last.text}`, data });
   }
   function heard(raw) {
     const t = raw.trim(); if (!t) return;
     const now = Date.now();
-    if (WAKE_RE.test(t)) {
+    // 「スタック」が文の頭(「ねえ」などの後)にあるときだけ呼びかけとみなす。スタック自身の返事に名前が出ても取り違えない
+    if (WAKE_HEAD.test(t)) {
       const rest = t.replace(/^.*?(スタック|すたっく|ｽﾀｯｸ|stack)[、。,!！\s]*/i, "").trim();
-      if (rest) { convoAdd("あなた", rest); maybeResearch(rest); } else { convo.waitUser = now + 12000; convoAdd("あなた", "スタック"); }
+      if (rest) { convoAdd("あなた", rest); maybeResearch(rest); } else {
+        convo.waitUser = now + 12000; convoAdd("あなた", "スタック");
+        clearTimeout(convo.missT);
+        convo.missT = setTimeout(() => { if (convo.waitUser) { convo.waitUser = 0; convoAdd("司令室", "そのあとの言葉が聞き取れなかったよ。もう一回、ゆっくり言ってね。"); } }, 12500);
+      }
       return;
     }
-    if (now < convo.waitUser) { convo.waitUser = 0; convoAdd("あなた", t); maybeResearch(t); return; }
+    if (now < convo.waitUser) { convo.waitUser = 0; clearTimeout(convo.missT); convoAdd("あなた", t); maybeResearch(t); return; }
     if (now < convo.waitReply) { convo.waitReply = now + 15000; convoAdd("スタック", t); return; }
     // 呼びかけ前のまわりの声は出さない
   }
@@ -747,6 +757,8 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
       $("heard").textContent = interim ? `🎤 ${interim}` : "🎤 聞いてるよ";
     };
     rec.onerror = (e) => {
+      if (e.error === "no-speech") $("heard").textContent = "🎤 聞いてるよ(まだ何も聞こえないの)";
+      if (e.error === "audio-capture") { micOn = false; setMicUi("マイクが見つからないみたい。ほかのアプリがマイクを使ってないか見てね"); return; }
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         micOn = false; setMicUi("マイクが使えないみたい。設定でマイクを許可するか、Safariで開いてね");
       }
@@ -756,13 +768,48 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     catch { rec = null; micOn = false; setMicUi("マイクを始められなかったよ。もう一回MICを押してね"); }
   }
   function micStop() { clearTimeout(restartT); if (rec) { try { rec.abort(); } catch {} rec = null; } }
-  function micPause(p) { micPaused = p; if (p) micStop(); else if (micOn) setTimeout(micStart, 400); }
+  function micPause(p) { if (!p && talking) return; micPaused = p; if (p) micStop(); else if (micOn) setTimeout(micStart, 400); }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && micOn && !micPaused && !rec) micStart(); });
   $("micBtn").onclick = () => {
     if (!SR) { setMicUi("この画面では声の聞き取りが使えないみたい。Safariで開いてためしてね"); return; }
     micOn = !micOn;
     if (micOn) micStart(); else { micStop(); setMicUi(""); }
   };
 
+
+  /* 画面(司令室)が自分で答えられる質問は、スタックの返事を待たずに答えを出す */
+  let answerSeq = 0;
+  async function pageAnswer(t) {
+    const seq = ++answerSeq;
+    let a = null;
+    try { a = await answerFor(t); } catch { a = "いまデータを受け取れなかったよ。電波を確認してね。"; }
+    if (!a || seq !== answerSeq) return;
+    setTimeout(() => { if (seq === answerSeq) convoAdd("司令室", a); }, 1200);
+  }
+  async function answerFor(t) {
+    const q = t.replace(/(スタック|すたっく)[、。\s]*/g, "");
+    const tomorrow = /明日|あした|あす/.test(q);
+    if (/天気|雪|雨|晴れ|くもり|曇り|気温|寒い|寒く|暑い|暑く|傘|降る|ふる/.test(q)) {
+      const c = await uedaWeather(tomorrow ? 1 : 0), w = (c.data && c.data["天気"]) || "", day = tomorrow ? "明日" : "今日";
+      const pop = c.data && c.data["降水確率"] ? `降水確率は ${c.data["降水確率"]}。` : "";
+      if (/雪/.test(q)) return (/雪/.test(w) ? `${day}の上田は雪が降るかもしれないのよ。` : `${day}の上田は雪の予報はないよ。`) + `予報は「${w}」ね。` + pop;
+      if (/雨|傘|降る|ふる/.test(q)) return (/雨/.test(w) ? `${day}の上田は雨が降るかもしれないのよ。傘を持っていってね。` : `${day}の上田は雨の予報はないよ。`) + `予報は「${w}」ね。` + pop;
+      return c.text + (pop ? " " + pop : "");
+    }
+    if (/警報|注意報/.test(q)) return (await warnings()).text;
+    if (/日の出|日の入り|月齢|お月さま|月は/.test(q)) return sky().text;
+    if (/メモ|やること/.test(q)) return memoCard().text;
+    const n = jst();
+    if (/何時|なんじ|時間|時刻/.test(q)) return `いまは${n.getHours()}時${n.getMinutes()}分よ。`;
+    if (/何日|なんにち|何曜|なんよう|日付|今日は何/.test(q)) return `今日は${n.getMonth() + 1}月${n.getDate()}日、${WD[n.getDay()]}曜日なのよ。`;
+    if (/おはよう/.test(q)) return "おはよう、川村さん！今日もよろしくね。";
+    if (/こんにちは/.test(q)) return "こんにちは、川村さん！";
+    if (/こんばんは/.test(q)) return "こんばんは、川村さん。今日もおつかれさま。";
+    if (/おつかれ|お疲れ/.test(q)) return "おつかれさま、川村さん！ゆっくり休んでね。";
+    if (/おやすみ/.test(q)) return "おやすみ、川村さん。また明日ね。";
+    if (/ありがとう/.test(q)) return "どういたしまして！ちょー嬉しい、ちょー嬉しい！";
+    return null;
+  }
   /* 「調べて」と言ったら、ページが自分で調べて出す */
   async function maybeResearch(t) {
     if (!/調べ|しらべ/.test(t)) return;
