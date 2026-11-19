@@ -284,7 +284,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "2.7";
+const PAGE_VER = "2.8";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -568,15 +568,27 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     });
   }
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  function isTyping() { const a = document.activeElement; return !!a && (a.tagName === "TEXTAREA" || (a.tagName === "INPUT" && /^(text|password|search|email|tel|url)$/.test(a.type))); }
+  /* iPhone: 画面の見えている範囲に .app をぴったり合わせる(押せる位置と見た目のズレ防止) */
+  function fitApp() {
+    const vv = window.visualViewport, app = $("app");
+    if (!vv) return;
+    const kb = isTyping();
+    if (kb) { app.style.height = ""; app.style.top = ""; return; }
+    app.style.top = "0px"; app.style.height = Math.round(vv.height) + "px";
+  }
+  if (window.visualViewport) { visualViewport.addEventListener("resize", () => setTimeout(fitApp, 80)); }
+  addEventListener("orientationchange", () => setTimeout(() => { resetView(); fitApp(); }, 300));
+  setTimeout(fitApp, 300);
   /* iPhone: キーボードを出したあと画面がずれて、ボタンの押せる位置がズレるのを防ぐ */
   function resetView() { window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0; }
-  function closeKeyboard() { const a = document.activeElement; if (a && a.blur && a.tagName === "INPUT") a.blur(); setTimeout(resetView, 60); }
+  function closeKeyboard() { const a = document.activeElement; if (a && a.blur && isTyping()) a.blur(); setTimeout(resetView, 60); }
   document.addEventListener("focusout", () => setTimeout(resetView, 60));
   if (window.visualViewport) {
     let lastH = visualViewport.height;
     visualViewport.addEventListener("resize", () => { if (visualViewport.height > lastH + 80) setTimeout(resetView, 60); lastH = visualViewport.height; });
   }
-  window.addEventListener("scroll", () => { if (!document.activeElement || document.activeElement.tagName !== "INPUT") resetView(); }, { passive: true });
+  window.addEventListener("scroll", () => { if (!isTyping()) resetView(); }, { passive: true });
   let talking = false;
   async function talk(raw) {
     const text = (raw || "").trim();
@@ -745,10 +757,17 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     $("micBtn").classList.toggle("on", micOn); $("micBtn").setAttribute("aria-pressed", micOn ? "true" : "false");
     if (msg != null) $("heard").textContent = msg;
   }
+  let fastFails = 0, micIdleT = null;
+  function micIdle() { clearTimeout(micIdleT); micIdleT = setTimeout(() => { if (micOn) { micOn = false; micStop(); setMicUi("10分なにも聞こえなかったから、MICを止めたよ"); } }, 600000); }
   function micStart() {
     if (!micOn || micPaused || rec) return;
-    rec = new SR(); rec.lang = "ja-JP"; rec.continuous = true; rec.interimResults = true;
-    rec.onresult = (e) => {
+    const r = new SR(); rec = r; r.lang = "ja-JP"; r.continuous = true; r.interimResults = true;
+    const startedAt = Date.now();
+    window.__bgLite = true;
+    micIdle();
+    r.onresult = (e) => {
+      if (rec !== r) return;
+      fastFails = 0; micIdle();
       let interim = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
@@ -756,24 +775,33 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
       }
       $("heard").textContent = interim ? `🎤 ${interim}` : "🎤 聞いてるよ";
     };
-    rec.onerror = (e) => {
+    r.onerror = (e) => {
+      if (rec !== r) return;
       if (e.error === "no-speech") $("heard").textContent = "🎤 聞いてるよ(まだ何も聞こえないの)";
       if (e.error === "audio-capture") { micOn = false; setMicUi("マイクが見つからないみたい。ほかのアプリがマイクを使ってないか見てね"); return; }
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         micOn = false; setMicUi("マイクが使えないみたい。設定でマイクを許可するか、Safariで開いてね");
       }
     };
-    rec.onend = () => { rec = null; if (micOn && !micPaused) { clearTimeout(restartT); restartT = setTimeout(micStart, 300); } };
-    try { rec.start(); setMicUi("🎤 聞いてるよ。「スタック」って呼んでね"); }
-    catch { rec = null; micOn = false; setMicUi("マイクを始められなかったよ。もう一回MICを押してね"); }
+    r.onend = () => {
+      if (rec !== r) return;   // 古い聞き取りの終わりは無視(二重に動かさない)
+      rec = null;
+      if (!micOn || micPaused) { window.__bgLite = false; return; }
+      fastFails = Date.now() - startedAt < 1500 ? fastFails + 1 : 0;
+      if (fastFails >= 4) { micOn = false; window.__bgLite = false; setMicUi("聞き取りがすぐ止まっちゃうみたい。MICを止めたよ。Safariで開くと動くかも"); return; }
+      clearTimeout(restartT); restartT = setTimeout(micStart, 500 + fastFails * 1500);
+    };
+    try { r.start(); setMicUi("🎤 聞いてるよ。「スタック」って呼んでね"); }
+    catch { rec = null; micOn = false; window.__bgLite = false; setMicUi("マイクを始められなかったよ。もう一回MICを押してね"); }
   }
-  function micStop() { clearTimeout(restartT); if (rec) { try { rec.abort(); } catch {} rec = null; } }
+  function micStop() { clearTimeout(restartT); clearTimeout(micIdleT); const r = rec; rec = null; window.__bgLite = false; if (r) { try { r.abort(); } catch {} } }
   function micPause(p) { if (!p && talking) return; micPaused = p; if (p) micStop(); else if (micOn) setTimeout(micStart, 400); }
   document.addEventListener("visibilitychange", () => { if (!document.hidden && micOn && !micPaused && !rec) micStart(); });
   $("micBtn").onclick = () => {
     if (!SR) { setMicUi("この画面では声の聞き取りが使えないみたい。Safariで開いてためしてね"); return; }
     micOn = !micOn;
-    if (micOn) micStart(); else { micStop(); setMicUi(""); }
+    fastFails = 0;
+    if (micOn) micStart(); else { micStop(); setMicUi("MICを止めたよ"); }
   };
 
 
@@ -919,7 +947,9 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   }
 
   let last = 0;
+  let skip = false;
   function frame(t) {
+    if (window.__bgLite) { skip = !skip; if (skip) { requestAnimationFrame(frame); return; } } // MIC中は背景を軽くする
     const time = t / 1000, dt = Math.min(.05, last ? time - last : 1 / 60); last = time;
     pulse = Math.max(0, pulse - dt * .45);
     ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
