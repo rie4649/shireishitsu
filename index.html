@@ -105,6 +105,8 @@
   button:active { background: rgba(61,139,255,.35); }
   button, input, label { touch-action: manipulation; }
   button:disabled { opacity: .45; }
+  button.chip.on { background: rgba(61,139,255,.45); color: #fff; border-color: var(--glow); box-shadow: 0 0 12px rgba(61,139,255,.6); }
+  .heard { color: var(--glow2); font-size: 12px; min-height: 1.2em; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60vw; }
   button.ghost { background: none; border: 0; color: var(--dim); font-size: 18px; cursor: pointer; }
 
   /* ---------- 引き出し(LOG / 設定) ---------- */
@@ -202,10 +204,12 @@
   <footer class="bottom">
     <div class="status">
       <div class="st" id="st">STANDBY ▸ 通信待機中</div>
+      <div class="heard" id="heard"></div>
       <div class="btns">
         <button class="chip" id="infoBtn" type="button">INFO</button>
         <button class="chip" id="logBtn" type="button">LOG</button>
         <button class="chip" id="setBtn" type="button">SET</button>
+        <button class="chip" id="micBtn" type="button" aria-pressed="false">MIC</button>
       </div>
     </div>
     <button class="stack" id="stackBtn" type="button" aria-label="スタック（押すと最後の答えをもう一度）">
@@ -280,7 +284,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "2.4";
+const PAGE_VER = "2.5";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -576,6 +580,8 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     if (!("speechSynthesis" in window)) { $("talkSt").textContent = "この端末は読み上げができないみたい"; return; }
     talking = true; $("talkGo").disabled = true;
     closeKeyboard();
+    micPause(true);
+    convoAdd("あなた(文字)", text);
     if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel(); // iPhoneは止めた直後の読み上げが消えることがある
     const line = $("optSay").checked ? `『${text}』って言って` : text;
     try {
@@ -591,6 +597,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
       $("talkIn").value = "";
     } finally {
       talking = false; $("talkGo").disabled = false;
+      micPause(false);
       setTimeout(() => { if (!talking && !/声が出ない/.test($("talkSt").textContent)) $("talkSt").textContent = ""; }, 6000);
     }
   }
@@ -696,6 +703,93 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   $("infoBtn").onclick = () => { closeKeyboard(); $("infoNote").textContent = ""; $("infoSheet").hidden = false; };
   document.querySelectorAll("[data-info]").forEach((b) => b.onclick = () => info(b.dataset.info));
 
+
+  /* ---------------- MIC: スマホのマイクで会話を聞き取って画面に出す ---------------- */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const WAKE_RE = /スタック|すたっく|ｽﾀｯｸ|stack/i;
+  let rec = null, micOn = false, micPaused = false, restartT = null;
+  const convo = { lines: [], waitUser: 0, waitReply: 0 };
+  const hms = () => { const n = jst(); return `${p2(n.getHours())}:${p2(n.getMinutes())}:${p2(n.getSeconds())}`; };
+  function convoAdd(who, text) {
+    if (!text) return;
+    convo.lines.push({ who, text, t: hms() });
+    if (convo.lines.length > 14) convo.lines.shift();
+    if (/あなた/.test(who)) convo.waitReply = Date.now() + 25000;
+    const last = convo.lines[convo.lines.length - 1], data = {};
+    convo.lines.slice(0, -1).reverse().forEach((l) => { data[`${l.t} ${l.who}`] = l.text; });
+    show({ id: "convo", time: Date.now(), title: "スタックとの会話", text: `${last.who}：${last.text}`, data });
+  }
+  function heard(raw) {
+    const t = raw.trim(); if (!t) return;
+    const now = Date.now();
+    if (WAKE_RE.test(t)) {
+      const rest = t.replace(/^.*?(スタック|すたっく|ｽﾀｯｸ|stack)[、。,!！\s]*/i, "").trim();
+      if (rest) { convoAdd("あなた", rest); maybeResearch(rest); } else { convo.waitUser = now + 12000; convoAdd("あなた", "スタック"); }
+      return;
+    }
+    if (now < convo.waitUser) { convo.waitUser = 0; convoAdd("あなた", t); maybeResearch(t); return; }
+    if (now < convo.waitReply) { convo.waitReply = now + 15000; convoAdd("スタック", t); return; }
+    // 呼びかけ前のまわりの声は出さない
+  }
+  function setMicUi(msg) {
+    $("micBtn").classList.toggle("on", micOn); $("micBtn").setAttribute("aria-pressed", micOn ? "true" : "false");
+    if (msg != null) $("heard").textContent = msg;
+  }
+  function micStart() {
+    if (!micOn || micPaused || rec) return;
+    rec = new SR(); rec.lang = "ja-JP"; rec.continuous = true; rec.interimResults = true;
+    rec.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) heard(r[0].transcript); else interim += r[0].transcript;
+      }
+      $("heard").textContent = interim ? `🎤 ${interim}` : "🎤 聞いてるよ";
+    };
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        micOn = false; setMicUi("マイクが使えないみたい。設定でマイクを許可するか、Safariで開いてね");
+      }
+    };
+    rec.onend = () => { rec = null; if (micOn && !micPaused) { clearTimeout(restartT); restartT = setTimeout(micStart, 300); } };
+    try { rec.start(); setMicUi("🎤 聞いてるよ。「スタック」って呼んでね"); }
+    catch { rec = null; micOn = false; setMicUi("マイクを始められなかったよ。もう一回MICを押してね"); }
+  }
+  function micStop() { clearTimeout(restartT); if (rec) { try { rec.abort(); } catch {} rec = null; } }
+  function micPause(p) { micPaused = p; if (p) micStop(); else if (micOn) setTimeout(micStart, 400); }
+  $("micBtn").onclick = () => {
+    if (!SR) { setMicUi("この画面では声の聞き取りが使えないみたい。Safariで開いてためしてね"); return; }
+    micOn = !micOn;
+    if (micOn) micStart(); else { micStop(); setMicUi(""); }
+  };
+
+  /* 「調べて」と言ったら、ページが自分で調べて出す */
+  async function maybeResearch(t) {
+    if (!/調べ|しらべ/.test(t)) return;
+    let q = t.replace(/(スタック|すたっく)/g, "").replace(/(を|について|のこと|って|の?情報)?\s*(調べ|しらべ)(て|てくれる|てほしい|てください|ろ)?.*$/, "").replace(/[、。？！?!\s]+/g, " ").trim();
+    try {
+      let card;
+      if (/天気/.test(q)) card = await uedaWeather(/明日|あした/.test(q) ? 1 : 0);
+      else if (/警報|注意報/.test(q)) card = await warnings();
+      else if (/日の出|日の入り|月/.test(q) && q.length < 8) card = sky();
+      else if (!q) card = { title: "調べた結果", text: "何を調べるか聞き取れなかったよ。「〇〇を調べて」って言ってね。" };
+      else card = await wiki(q);
+      const m = { id: "local" + Date.now(), time: Date.now(), ...card };
+      addLog(m); setTimeout(() => show(m), 1500);
+    } catch {
+      show({ id: "local" + Date.now(), time: Date.now(), title: `調べた結果：${q}`, text: "データを受け取れなかったよ。電波を確認してもう一回ね。" });
+    }
+  }
+  async function wiki(q) {
+    const s = await (await fetch(`https://ja.wikipedia.org/w/api.php?action=query&list=search&srlimit=1&format=json&origin=*&srsearch=${encodeURIComponent(q)}`)).json();
+    const hit = s.query && s.query.search && s.query.search[0];
+    if (!hit) return { title: `調べた結果：${q}`, text: "それはぼくのデータにないよ。" };
+    const d = await (await fetch(`https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(hit.title)}`)).json();
+    let ex = (d.extract || "").replace(/\s+/g, " ");
+    if (ex.length > 220) ex = ex.slice(0, 220) + "…";
+    return { title: `調べた結果：${hit.title}`, text: ex || "それはぼくのデータにないよ。", data: { "出典": "ウィキペディア" } };
+  }
+  window.__stackHeard = heard; // 手元での確認用
   window.__stackShow = (m) => show({ id: "local" + Date.now(), time: Date.now(), ...m }); // 手元での確認用
 })();
 
