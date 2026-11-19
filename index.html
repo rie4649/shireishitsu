@@ -272,7 +272,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "2.2";
+const PAGE_VER = "2.3";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -356,7 +356,8 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   setInterval(() => { eyes.setAttribute("transform", "translate(0 40) scale(1 .1) translate(0 -40)"); setTimeout(() => eyes.removeAttribute("transform"), 140); }, 4200);
   function speakAloud(text) {
     if (!("speechSynthesis" in window) || !text) return;
-    speechSynthesis.cancel();
+    if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+    speechSynthesis.resume();
     const u = new SpeechSynthesisUtterance(text.replace(/…+/g, "、"));
     u.lang = "ja-JP"; u.rate = 1.05; u.pitch = 1.35;
     const v = speechSynthesis.getVoices().find((x) => x.lang && x.lang.startsWith("ja")); if (v) u.voice = v;
@@ -534,9 +535,13 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     return new Promise((res) => {
       const u = new SpeechSynthesisUtterance(text);
       u.lang = "ja-JP"; u.rate = 0.95; u.pitch = 1; u.volume = 1;
-      const v = jaVoice(); if (v) u.voice = v;
-      const guard = setTimeout(res, 3000 + text.length * 350); // 終わりの合図が来ない端末の保険
-      u.onend = u.onerror = () => { clearTimeout(guard); res(); };
+      const v = jaVoice(); if (v && v.localService !== false) u.voice = v;
+      let started = false;
+      u.onstart = () => { started = true; };
+      const guard = setTimeout(() => res(started), 3000 + text.length * 350); // 終わりの合図が来ない端末の保険
+      u.onend = () => { clearTimeout(guard); res(true); };
+      u.onerror = () => { clearTimeout(guard); res(started); };
+      speechSynthesis.resume();
       speechSynthesis.speak(u);
     });
   }
@@ -557,21 +562,21 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     if (!("speechSynthesis" in window)) { $("talkSt").textContent = "この端末は読み上げができないみたい"; return; }
     talking = true; $("talkGo").disabled = true;
     closeKeyboard();
-    speechSynthesis.cancel();
+    if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel(); // iPhoneは止めた直後の読み上げが消えることがある
     const line = $("optSay").checked ? `『${text}』って言って` : text;
     try {
       if ($("optWake").checked) {
         $("talkSt").textContent = "▸ 呼びかけ中";
-        await utter("スタック");
+        if (!(await utter("スタック"))) { $("talkSt").textContent = "▸ 声が出ないみたい。消音スイッチと音量を確認してね"; return; }
         await wait(1600);   // スタックが目をさますのを待つ
       }
       $("talkSt").textContent = "▸ 送話中";
-      await utter(line);
+      if (!(await utter(line))) { $("talkSt").textContent = "▸ 声が出ないみたい。消音スイッチと音量を確認してね"; return; }
       $("talkSt").textContent = "▸ 送信完了。スタックの返事を聞いてね";
       $("talkIn").value = "";
     } finally {
       talking = false; $("talkGo").disabled = false;
-      setTimeout(() => { if (!talking) $("talkSt").textContent = ""; }, 6000);
+      setTimeout(() => { if (!talking && !/声が出ない/.test($("talkSt").textContent)) $("talkSt").textContent = ""; }, 6000);
     }
   }
   $("talkForm").onsubmit = (e) => { e.preventDefault(); talk($("talkIn").value); };
