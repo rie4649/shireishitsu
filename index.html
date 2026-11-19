@@ -193,7 +193,7 @@
       <button class="btn" type="submit" id="talkGo">話す</button>
     </form>
     <div class="opts">
-      <label><input type="checkbox" id="optWake" checked>「スタック」と呼びかける</label>
+      <label><input type="checkbox" id="optWake" checked><span id="optWakeLabel">「スタック」と呼びかける</span></label>
       <label><input type="checkbox" id="optSay">そのまま言わせる</label>
       <span class="sending" id="talkSt"></span>
     </div>
@@ -260,6 +260,14 @@
   <p><b>通信キー</b><br>スタックの道具プログラム(パソコン)の settings.txt に貼る合いカギよ。チャットには貼らないでね。</p>
   <div class="key" id="keyBox">----</div>
   <div class="row"><button class="btn" id="copyKey" type="button">コピーする</button></div>
+  <p><b>話しかけ方</b><br>まず呼びかけ言葉だけを読んで、スタックが起きるのを待ってから本文を読むよ。</p>
+  <div class="row" style="align-items:center">
+    <label style="font-size:13px">呼びかけ言葉 <input id="wakeWord" type="text" style="width:9em;font-size:16px;background:rgba(2,8,22,.85);color:var(--ice);border:1px solid var(--line);border-radius:4px;padding:6px"></label>
+  </div>
+  <div class="row" style="align-items:center">
+    <label style="font-size:13px">待つ時間 <select id="wakeWait" style="font-size:16px;background:rgba(2,8,22,.85);color:var(--ice);border:1px solid var(--line);border-radius:4px;padding:6px">
+      <option value="1500">1.5秒</option><option value="2000">2秒</option><option value="2500">2.5秒</option><option value="3000">3秒</option><option value="4000">4秒</option><option value="5000">5秒</option></select></label>
+  </div>
   <p><b>テスト受信</b><br>スタックがいなくても、中継を通って画面に届くか試せるよ。</p>
   <div class="row">
     <button class="btn" id="testHello" type="button">あいさつを送る</button>
@@ -272,7 +280,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "2.3";
+const PAGE_VER = "2.4";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -530,6 +538,12 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   $("quick").innerHTML = QUICK.map((q) => `<button class="chip" type="button">${esc(q)}</button>`).join("");
   $("quick").querySelectorAll("button").forEach((b) => b.onclick = () => talk(b.textContent));
   ["optWake", "optSay"].forEach((id) => { const v = store.get(id); if (v != null) $(id).checked = v === "1"; $(id).onchange = () => store.set(id, $(id).checked ? "1" : "0"); });
+  const wakeWord = () => (store.get("wakeWord") || "スタック").trim() || "スタック";
+  $("wakeWord").value = wakeWord();
+  $("wakeWord").onchange = () => { store.set("wakeWord", $("wakeWord").value.trim()); $("optWakeLabel").textContent = `「${wakeWord()}」と呼びかける`; };
+  $("wakeWait").value = store.get("wakeWait") || "2500";
+  $("wakeWait").onchange = () => store.set("wakeWait", $("wakeWait").value);
+  $("optWakeLabel").textContent = `「${wakeWord()}」と呼びかける`;
   function jaVoice() { return speechSynthesis.getVoices().find((x) => x.lang && x.lang.replace("_", "-").startsWith("ja")); }
   function utter(text) {
     return new Promise((res) => {
@@ -567,8 +581,9 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     try {
       if ($("optWake").checked) {
         $("talkSt").textContent = "▸ 呼びかけ中";
-        if (!(await utter("スタック"))) { $("talkSt").textContent = "▸ 声が出ないみたい。消音スイッチと音量を確認してね"; return; }
-        await wait(1600);   // スタックが目をさますのを待つ
+        if (!(await utter(wakeWord()))) { $("talkSt").textContent = "▸ 声が出ないみたい。消音スイッチと音量を確認してね"; return; }
+        $("talkSt").textContent = "▸ スタックが起きるのを待ってるよ";
+        await wait(+(store.get("wakeWait") || 2500));   // スタックが目をさますのを待つ
       }
       $("talkSt").textContent = "▸ 送話中";
       if (!(await utter(line))) { $("talkSt").textContent = "▸ 声が出ないみたい。消音スイッチと音量を確認してね"; return; }
