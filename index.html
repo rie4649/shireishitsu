@@ -171,7 +171,7 @@
 <div class="app locked" id="app" aria-hidden="true">
   <header class="topbar">
     <div><div class="tag"><b>■</b> STACK<span class="long"> // COMMAND ROOM</span></div>
-      <div class="sub">LINK ▸ <span id="link">----</span> · VER 2.1</div></div>
+      <div class="sub">LINK ▸ <span id="link">----</span> · VER <span id="ver"></span></div></div>
     <div class="clock"><div class="t" id="clock">--:--:--</div><div id="date">----</div></div>
   </header>
 
@@ -271,6 +271,22 @@
 <div class="gate" id="gate"><div class="box" id="gateBox"></div></div>
 
 <script>
+/* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
+const PAGE_VER = "2.2";
+(() => {
+  const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
+  let busy = false;
+  async function check() {
+    if (busy) return; busy = true;
+    try {
+      const r = await fetch(location.pathname + "?chk=" + Date.now(), { cache: "no-store" });
+      const m = (await r.text()).match(/const PAGE_VER = "([^"]+)"/);
+      if (m && m[1] !== PAGE_VER && !location.search.includes("v=" + encodeURIComponent(m[1]))) location.replace(location.pathname + "?v=" + encodeURIComponent(m[1]));
+    } catch {} finally { busy = false; }
+  }
+  check();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
+})();
 /* ===== 合言葉の登録コード（川村さんが決めた合言葉から作ったもの） ===== */
 const PASS_CODE = "dcbbd13c783a25d504eed386ea8c7e7d";
 const SALT = "stack-shireishitsu-v1";
