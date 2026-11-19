@@ -16,18 +16,16 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Noto+Sans+JP:wght@400;500;700&display=swap">
 <style>
   /* =========================================================
-     スタック司令室  ver 1.0
-     背景(canvas)は飾り。意味があるのは中央の天気と、隅のスタックの通信だけ。
+     スタック司令室  ver 2.0
+     ふだんは背景だけ。スタックから通信が届いたら中央に出る。
      ========================================================= */
   :root {
     --void: #02040b;
-    --navy: #06122a;
     --glow: #3d8bff;
     --glow2: #7fb6ff;
     --ice: #cfe3ff;
     --dim: #6f8fbf;
     --warn: #ffcf7a;
-    --panel: rgba(8, 22, 52, .55);
     --line: rgba(120, 175, 255, .28);
     --mono: "Share Tech Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
     --jp: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
@@ -35,10 +33,7 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
-  body {
-    background: var(--void); color: var(--ice); font-family: var(--jp);
-    overflow: hidden; -webkit-tap-highlight-color: transparent;
-  }
+  body { background: var(--void); color: var(--ice); font-family: var(--jp); overflow: hidden; -webkit-tap-highlight-color: transparent; }
   canvas#bg { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
   .app {
@@ -47,135 +42,125 @@
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
-    display: grid; grid-template-rows: auto 1fr auto; gap: 10px;
+    display: grid; grid-template-rows: auto 1fr auto auto; grid-template-columns: minmax(0, 1fr); gap: 10px; pointer-events: none;
   }
-  .topbar {
-    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
-    font-family: var(--mono); font-size: 12px; letter-spacing: .14em; color: var(--dim);
-  }
+  .app > * { pointer-events: auto; }
+  .app.locked { visibility: hidden; }
+  .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    font-family: var(--mono); font-size: 12px; letter-spacing: .14em; color: var(--dim); }
   .topbar .tag { color: var(--ice); white-space: nowrap; }
   .topbar .tag b { color: var(--glow); font-weight: 400; }
+  .topbar .sub { margin-top: 4px; font-size: 10px; }
   .clock { text-align: right; font-variant-numeric: tabular-nums; }
   .clock .t { color: var(--ice); font-size: 15px; }
+  #link.on { color: var(--glow2); } #link.off { color: var(--warn); }
 
-  /* ---------- center: weather ---------- */
-  .center { display: flex; align-items: center; justify-content: center; min-height: 0; overflow-y: auto; }
-  .panel {
-    width: min(560px, 100%);
-    background: linear-gradient(180deg, rgba(8, 24, 58, .86), rgba(3, 10, 28, .88));
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    box-shadow: 0 0 0 1px rgba(61,139,255,.06), 0 0 40px rgba(40,110,255,.18) inset;
-    padding: 16px 18px 14px; position: relative;
+  /* ---------- 中央: 受信パネル ---------- */
+  .center { display: flex; align-items: center; justify-content: center; min-height: 0; pointer-events: none; }
+  .rx {
+    pointer-events: auto; width: min(560px, 100%); max-height: 100%; overflow-y: auto;
+    background: linear-gradient(180deg, rgba(8, 24, 58, .86), rgba(3, 10, 28, .9));
+    border: 1px solid var(--line); border-radius: 6px; position: relative;
+    box-shadow: 0 0 40px rgba(40,110,255,.25), 0 0 60px rgba(40,110,255,.15) inset;
+    padding: 14px 18px 14px;
+    opacity: 0; transform: scale(.96); filter: blur(4px);
+    transition: opacity .5s, transform .5s, filter .5s; visibility: hidden;
   }
-  .panel::before, .panel::after {   /* 角の光るカギ */
-    content: ""; position: absolute; width: 14px; height: 14px; border: 2px solid var(--glow2);
-  }
-  .panel::before { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
-  .panel::after { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
-  .ph {
-    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
-    font-family: var(--mono); font-size: 11px; letter-spacing: .16em; color: var(--dim);
-    border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 12px;
-  }
-  .ph .place { font-family: var(--jp); letter-spacing: .06em; color: var(--ice); font-size: 13px; }
-  .live { color: var(--glow2); }
-  .live::before { content: "●"; margin-right: 6px; animation: blink 1.6s steps(2) infinite; }
+  .rx.show { opacity: 1; transform: none; filter: none; visibility: visible; }
+  .rx::before, .rx::after { content: ""; position: absolute; width: 14px; height: 14px; border: 2px solid var(--glow2); }
+  .rx::before { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
+  .rx::after { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
+  .rx .hd { display: flex; justify-content: space-between; gap: 8px; font-family: var(--mono); font-size: 11px;
+    letter-spacing: .16em; color: var(--glow2); border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 10px; }
+  .rx .hd .when { color: var(--dim); }
+  .rx h2 { font-size: 18px; font-weight: 700; margin-bottom: 6px; text-shadow: 0 0 12px rgba(80,150,255,.55); }
+  .rx .say { font-size: 15px; line-height: 1.75; }
+  .rx .say::after { content: "▍"; color: var(--glow2); animation: blink 1s steps(2) infinite; }
+  .rx .say.done::after { content: ""; }
+  .rx dl { margin-top: 12px; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 14px;
+    border-top: 1px dashed var(--line); padding-top: 10px; }
+  .rx dt { color: var(--dim); font-size: 12px; padding-top: 2px; white-space: nowrap; }
+  .rx dd { font-family: var(--jp); }
+  .rx dd.num { font-family: var(--mono); font-size: 16px; color: #e6f1ff; }
+  .rx .x { position: absolute; top: 6px; right: 8px; }
+  .rx .hd { padding-right: 22px; }
+  .rx .bar { height: 2px; background: var(--glow); margin-top: 12px; transform-origin: left; }
   @keyframes blink { 50% { opacity: .2; } }
 
-  .today { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
-  .wicon { width: 76px; height: 76px; filter: drop-shadow(0 0 8px rgba(80,150,255,.7)); }
-  .wday { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; color: var(--dim); }
-  .wtext { font-size: 20px; font-weight: 700; line-height: 1.35; margin: 2px 0 6px; text-shadow: 0 0 12px rgba(80,150,255,.55); }
-  .temps { display: flex; gap: 18px; font-family: var(--mono); align-items: baseline; flex-wrap: wrap; }
-  .temps .lbl { font-family: var(--jp); font-size: 11px; color: var(--dim); margin-right: 6px; }
-  .temps .hi { font-size: 26px; color: #ffd9a8; text-shadow: 0 0 10px rgba(255,170,90,.45); }
-  .temps .lo { font-size: 26px; color: #a8d4ff; text-shadow: 0 0 10px rgba(90,170,255,.55); }
-  .temps small { font-size: 13px; margin-left: 2px; color: var(--dim); }
-
-  .pops { margin-top: 14px; }
-  .pops .cap { font-size: 11px; color: var(--dim); margin-bottom: 6px; display: flex; justify-content: space-between; }
-  .bars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .bar { border: 1px solid var(--line); border-radius: 3px; padding: 6px 4px 5px; text-align: center; position: relative; overflow: hidden; }
-  .bar .fill { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(0deg, rgba(61,139,255,.55), rgba(61,139,255,.08)); }
-  .bar .v { position: relative; font-family: var(--mono); font-size: 16px; }
-  .bar .h { position: relative; font-family: var(--mono); font-size: 10px; color: var(--dim); }
-  .bar.na .v { color: var(--dim); }
-
-  .tomorrow {
-    margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line);
-    display: grid; grid-template-columns: auto auto 1fr auto; gap: 10px; align-items: center; font-size: 13px;
-  }
-  .tomorrow .wicon { width: 34px; height: 34px; }
-  .tomorrow .tt { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
-  .tomorrow .tt .hi2 { color: #ffd9a8; } .tomorrow .tt .lo2 { color: #a8d4ff; }
-  .src { margin-top: 10px; font-size: 10px; color: var(--dim); line-height: 1.6; }
-  .err { color: var(--warn); font-size: 13px; line-height: 1.7; }
-  .err button { margin-top: 8px; }
-
-  /* ---------- bottom: stack + 通信 ---------- */
-  .comms { display: flex; align-items: flex-end; justify-content: flex-end; gap: 10px; }
-  .bubble {
-    max-width: 440px; flex: 1 1 auto;
-    background: rgba(4, 14, 36, .78); border: 1px solid var(--line); border-radius: 6px 6px 0 6px;
-    padding: 8px 12px 10px; font-size: 14px; line-height: 1.65; min-height: 3.2em;
-  }
-  .bubble .who { font-family: var(--mono); font-size: 10px; letter-spacing: .16em; color: var(--glow2); margin-bottom: 2px; }
-  .bubble .msg::after { content: "▍"; color: var(--glow2); animation: blink 1s steps(2) infinite; }
-  .bubble .msg.done::after { content: ""; }
-  .stack { width: 86px; flex: 0 0 auto; cursor: pointer; background: none; border: 0; padding: 0; color: inherit; }
+  /* ---------- 下: スタックと状態 ---------- */
+  .bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+  .status { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; color: var(--dim); line-height: 1.9; }
+  .status .st::before { content: "●"; margin-right: 6px; color: var(--glow2); animation: blink 1.6s steps(2) infinite; }
+  .btns { display: flex; gap: 8px; margin-top: 6px; }
+  .stack { width: 78px; flex: 0 0 auto; cursor: pointer; background: none; border: 0; padding: 0; color: inherit; }
   .stack svg { width: 100%; height: auto; display: block; filter: drop-shadow(0 0 10px rgba(61,139,255,.55)); }
-  .stack:focus-visible { outline: 1px dashed var(--glow2); outline-offset: 4px; }
   .stack .cap { font-family: var(--mono); font-size: 9px; letter-spacing: .14em; color: var(--dim); text-align: center; margin-top: 2px; }
 
-  button.btn {
-    font-family: var(--jp); font-size: 14px; color: var(--ice); cursor: pointer;
-    background: rgba(61,139,255,.18); border: 1px solid var(--glow); border-radius: 4px; padding: 8px 16px;
+  button.btn, button.chip {
+    font-family: var(--jp); color: var(--ice); cursor: pointer;
+    background: rgba(61,139,255,.16); border: 1px solid var(--glow); border-radius: 4px;
   }
-  button.btn:active { background: rgba(61,139,255,.35); }
+  button.btn { font-size: 14px; padding: 8px 16px; }
+  button.chip { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; padding: 5px 10px; background: rgba(4,14,36,.7); border-color: var(--line); color: var(--glow2); }
+  button:active { background: rgba(61,139,255,.35); }
+  button.ghost { background: none; border: 0; color: var(--dim); font-size: 18px; cursor: pointer; }
+
+  /* ---------- 引き出し(LOG / 設定) ---------- */
+  .sheet { position: fixed; inset: 0; z-index: 8; background: rgba(1,3,9,.7); display: flex; align-items: flex-end; justify-content: center; }
+  .sheet[hidden] { display: none; }
+  .sheet .in {
+    width: min(560px, 100%); max-height: 80vh; overflow-y: auto;
+    background: #050d22; border: 1px solid var(--line); border-bottom: 0; border-radius: 10px 10px 0 0;
+    padding: 14px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+  .sheet .hd { display: flex; justify-content: space-between; align-items: center; font-family: var(--mono);
+    letter-spacing: .16em; font-size: 12px; color: var(--glow2); margin-bottom: 10px; }
+  .log-item { border-top: 1px solid var(--line); padding: 10px 0; cursor: pointer; }
+  .log-item .w { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+  .log-item .s { font-size: 14px; line-height: 1.6; margin-top: 2px; }
+  .empty { color: var(--dim); font-size: 13px; padding: 12px 0; }
+  .set p { font-size: 13px; line-height: 1.75; color: var(--ice); margin-bottom: 10px; }
+  .set .key { font-family: var(--mono); font-size: 14px; word-break: break-all; user-select: all;
+    background: rgba(2,8,22,.8); border: 1px dashed var(--glow2); padding: 10px; border-radius: 4px; margin: 6px 0 10px; }
+  .set .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .note { min-height: 1.4em; font-size: 13px; color: var(--warn); margin-top: 6px; }
 
   /* ---------- 合言葉ゲート ---------- */
-  .gate {
-    position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
-    background: radial-gradient(ellipse at center, rgba(6,18,42,.55), rgba(2,4,11,.92));
-    padding: 16px;
-  }
+  .gate { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(6,18,42,.55), rgba(2,4,11,.92)); padding: 16px; }
   .gate[hidden] { display: none; }
-  .app.locked { visibility: hidden; }
   .gate .box { width: min(360px, 100%); text-align: center; }
   .gate .k { font-family: var(--mono); letter-spacing: .3em; font-size: 12px; color: var(--glow2); margin-bottom: 14px; }
   .gate h1 { font-size: 18px; font-weight: 500; margin-bottom: 6px; }
   .gate p { font-size: 12px; color: var(--dim); line-height: 1.7; margin-bottom: 14px; }
-  .gate input {
-    width: 100%; font-size: 18px; text-align: center; letter-spacing: .1em;
-    background: rgba(2,8,22,.8); color: var(--ice); border: 1px solid var(--glow); border-radius: 4px;
-    padding: 10px; margin-bottom: 10px; outline: none; font-family: var(--jp);
-  }
+  .gate input { width: 100%; font-size: 18px; text-align: center; letter-spacing: .1em; background: rgba(2,8,22,.8);
+    color: var(--ice); border: 1px solid var(--glow); border-radius: 4px; padding: 10px; margin-bottom: 10px; outline: none; font-family: var(--jp); }
   .gate input:focus { box-shadow: 0 0 0 3px rgba(61,139,255,.3); }
-  .gate .note { min-height: 1.5em; font-size: 13px; color: var(--warn); margin-top: 8px; }
-  .gate .code {
-    font-family: var(--mono); font-size: 15px; letter-spacing: .08em; word-break: break-all; user-select: all;
-    background: rgba(2,8,22,.8); border: 1px dashed var(--glow2); padding: 10px; border-radius: 4px; margin: 8px 0 12px;
-  }
   .shake { animation: shake .35s; }
   @keyframes shake { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
 
-  /* ---------- 小さい画面 ---------- */
+  /* ---------- 話しかけ欄 ---------- */
+  .talk { display: flex; flex-direction: column; gap: 6px; width: min(560px, 100%); min-width: 0; justify-self: center; }
+  .talk form { display: flex; gap: 8px; }
+  .talk input[type=text] { flex: 1; min-width: 0; font-size: 16px; font-family: var(--jp); color: var(--ice);
+    background: rgba(2,8,22,.85); border: 1px solid var(--line); border-radius: 4px; padding: 9px 10px; outline: none; }
+  .talk input[type=text]:focus { border-color: var(--glow); box-shadow: 0 0 0 3px rgba(61,139,255,.25); }
+  .talk .opts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--dim); }
+  .talk .opts label { display: inline-flex; gap: 4px; align-items: center; margin-right: 6px; }
+  .talk .quick { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .talk .quick::-webkit-scrollbar { display: none; }
+  .talk .quick button { white-space: nowrap; font-family: var(--jp); letter-spacing: 0; font-size: 12px; }
+  .talk .sending { color: var(--glow2); font-family: var(--mono); font-size: 11px; letter-spacing: .12em; min-height: 1.2em; }
+
   @media (max-width: 520px) {
     .topbar { font-size: 10px; letter-spacing: .1em; }
     .topbar .tag .long { display: none; }
-    .panel { padding: 14px 14px 12px; }
-    .wicon { width: 60px; height: 60px; }
-    .wtext { font-size: 17px; }
-    .temps .hi, .temps .lo { font-size: 22px; }
-    .bubble { font-size: 13px; }
-    .stack { width: 70px; }
-    .tomorrow { grid-template-columns: auto 1fr auto; row-gap: 4px; }
-    .tomorrow .wday { grid-column: 1 / 4; }
+    .rx { padding: 12px 14px; }
+    .rx h2 { font-size: 16px; }
+    .rx .say { font-size: 14px; }
+    .stack { width: 66px; }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .live::before, .bubble .msg::after { animation: none; }
-  }
+  @media (prefers-reduced-motion: reduce) { .status .st::before, .rx .say::after { animation: none; } }
 </style>
 </head>
 <body>
@@ -183,46 +168,57 @@
 
 <div class="app locked" id="app" aria-hidden="true">
   <header class="topbar">
-    <span class="tag"><b>■</b> STACK<span class="long"> // COMMAND ROOM</span></span>
+    <div><div class="tag"><b>■</b> STACK<span class="long"> // COMMAND ROOM</span></div>
+      <div class="sub">LINK ▸ <span id="link">----</span></div></div>
     <div class="clock"><div class="t" id="clock">--:--:--</div><div id="date">----</div></div>
   </header>
 
   <main class="center">
-    <section class="panel" aria-label="上田市の天気">
-      <div class="ph"><span class="place">上田市の天気</span><span class="live" id="live">RECEIVING</span></div>
-      <div id="wx"><div class="err" style="color:var(--dim)">気象庁のデータを受信中…</div></div>
+    <section class="rx" id="rx" aria-live="polite">
+      <button class="ghost x" id="rxClose" type="button" aria-label="閉じる">×</button>
+      <div class="hd"><span>◤ INCOMING ▸ STACK</span><span class="when" id="rxWhen"></span></div>
+      <h2 id="rxTitle"></h2>
+      <div class="say" id="rxSay"></div>
+      <dl id="rxData"></dl>
+      <div class="bar" id="rxBar"></div>
     </section>
   </main>
 
-  <footer class="comms">
-    <div class="bubble" aria-live="polite">
-      <div class="who">TRANSMISSION ▸ STACK</div>
-      <div class="msg" id="msg"></div>
+  <section class="talk" aria-label="スタックに話しかける">
+    <div class="quick" id="quick"></div>
+    <form id="talkForm" autocomplete="off">
+      <input type="text" id="talkIn" placeholder="スタックに話しかける" enterkeyhint="send" aria-label="スタックに話しかける言葉">
+      <button class="btn" type="submit" id="talkGo">話す</button>
+    </form>
+    <div class="opts">
+      <label><input type="checkbox" id="optWake" checked>「スタック」と呼びかける</label>
+      <label><input type="checkbox" id="optSay">そのまま言わせる</label>
+      <span class="sending" id="talkSt"></span>
     </div>
-    <button class="stack" id="stackBtn" type="button" aria-label="スタック（押すともう一度話すよ）">
+  </section>
+
+  <footer class="bottom">
+    <div class="status">
+      <div class="st" id="st">STANDBY ▸ 通信待機中</div>
+      <div class="btns">
+        <button class="chip" id="infoBtn" type="button">INFO</button>
+        <button class="chip" id="logBtn" type="button">LOG</button>
+        <button class="chip" id="setBtn" type="button">SET</button>
+      </div>
+    </div>
+    <button class="stack" id="stackBtn" type="button" aria-label="スタック（押すと最後の答えをもう一度）">
       <svg viewBox="0 0 100 110" aria-hidden="true">
-        <defs>
-          <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#1b2f5c"/><stop offset="1" stop-color="#0a1530"/>
-          </linearGradient>
-        </defs>
-        <!-- からだ（座った姿） -->
+        <defs><linearGradient id="shell" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2f5c"/><stop offset="1" stop-color="#0a1530"/></linearGradient></defs>
         <rect x="26" y="78" width="48" height="24" rx="8" fill="url(#shell)" stroke="#5c9bff" stroke-width="1.5"/>
         <rect x="18" y="96" width="22" height="9" rx="4" fill="#0e1c3e" stroke="#5c9bff" stroke-width="1.2"/>
         <rect x="60" y="96" width="22" height="9" rx="4" fill="#0e1c3e" stroke="#5c9bff" stroke-width="1.2"/>
         <circle cx="50" cy="90" r="3" fill="#7fb6ff"><animate attributeName="opacity" values="1;.25;1" dur="2.4s" repeatCount="indefinite"/></circle>
-        <!-- あたま -->
         <rect x="8" y="10" width="84" height="68" rx="14" fill="url(#shell)" stroke="#7fb6ff" stroke-width="2"/>
-        <!-- インカム -->
         <path d="M8 40 h-4 v16 h4" fill="none" stroke="#7fb6ff" stroke-width="2"/>
         <path d="M4 54 q0 14 18 16" fill="none" stroke="#7fb6ff" stroke-width="1.5"/>
         <circle cx="23" cy="70" r="2.2" fill="#7fb6ff"/>
-        <!-- 画面 -->
         <rect x="16" y="18" width="68" height="52" rx="8" fill="#030914"/>
-        <g id="eyes" fill="#d6e8ff">
-          <rect x="30" y="34" width="9" height="12" rx="4.5"/>
-          <rect x="61" y="34" width="9" height="12" rx="4.5"/>
-        </g>
+        <g id="eyes" fill="#d6e8ff"><rect x="30" y="34" width="9" height="12" rx="4.5"/><rect x="61" y="34" width="9" height="12" rx="4.5"/></g>
         <ellipse id="mouth" cx="50" cy="56" rx="8" ry="1.2" fill="#d6e8ff"/>
       </svg>
       <div class="cap">STACK</div>
@@ -230,24 +226,55 @@
   </footer>
 </div>
 
-<div class="gate" id="gate">
-  <div class="box" id="gateBox"></div>
-</div>
+<div class="sheet" id="logSheet" hidden><div class="in">
+  <div class="hd"><span>TRANSMISSION LOG</span><button class="ghost" data-close type="button" aria-label="閉じる">×</button></div>
+  <div id="logList"></div>
+</div></div>
+
+<div class="sheet" id="infoSheet" hidden><div class="in set">
+  <div class="hd"><span>INFORMATION</span><button class="ghost" data-close type="button" aria-label="閉じる">×</button></div>
+  <div class="row" id="infoBtns">
+    <button class="btn" data-info="today" type="button">今日の天気</button>
+    <button class="btn" data-info="tomorrow" type="button">明日の天気</button>
+    <button class="btn" data-info="week" type="button">週間天気</button>
+    <button class="btn" data-info="warn" type="button">警報・注意報</button>
+    <button class="btn" data-info="sky" type="button">日の出・月</button>
+    <button class="btn" data-info="memo" type="button">やることメモ</button>
+  </div>
+  <div class="note" id="infoNote"></div>
+</div></div>
+
+<div class="sheet" id="memoSheet" hidden><div class="in set">
+  <div class="hd"><span>MEMO</span><button class="ghost" data-close type="button" aria-label="閉じる">×</button></div>
+  <form id="memoForm" class="row" autocomplete="off" style="flex-wrap:nowrap">
+    <input type="text" id="memoIn" placeholder="やることを書く" aria-label="やること" style="flex:1;min-width:0;font-size:16px;font-family:var(--jp);color:var(--ice);background:rgba(2,8,22,.85);border:1px solid var(--line);border-radius:4px;padding:9px 10px;outline:none">
+    <button class="btn" type="submit">追加</button>
+  </form>
+  <div id="memoList"></div>
+</div></div>
+
+<div class="sheet" id="setSheet" hidden><div class="in set">
+  <div class="hd"><span>SETTINGS</span><button class="ghost" data-close type="button" aria-label="閉じる">×</button></div>
+  <p><b>通信キー</b><br>スタックの道具プログラム(パソコン)の settings.txt に貼る合いカギよ。チャットには貼らないでね。</p>
+  <div class="key" id="keyBox">----</div>
+  <div class="row"><button class="btn" id="copyKey" type="button">コピーする</button></div>
+  <p><b>テスト受信</b><br>スタックがいなくても、中継を通って画面に届くか試せるよ。</p>
+  <div class="row">
+    <button class="btn" id="testHello" type="button">あいさつを送る</button>
+    <button class="btn" id="testWx" type="button">上田の天気を送る</button>
+  </div>
+  <div class="note" id="setNote"></div>
+</div></div>
+
+<div class="gate" id="gate"><div class="box" id="gateBox"></div></div>
 
 <script>
-/* ===== 合言葉の登録コード =====
-   ここが空のあいだは「合言葉を決める」画面になります。
-   決めると出てくる登録コードを、下の "" の中に入れると完成。 */
+/* ===== 合言葉の登録コード（川村さんが決めた合言葉から作ったもの） ===== */
 const PASS_CODE = "dcbbd13c783a25d504eed386ea8c7e7d";
 const SALT = "stack-shireishitsu-v1";
-
-/* ===== 天気の設定（stack_tools.py と同じ） ===== */
-const JMA_URL = "https://www.jma.go.jp/bosai/forecast/data/forecast/200000.json"; // 長野県
-const AREA = "200020";     // 長野県 中部（上田市を含む）
-const WEEK_AREA = "200100";// 週間予報 中部・南部
-const TEMP = "48156";      // 気温の地点：長野
-const TEMP_NAME = "長野市";
-const REFRESH_MIN = 30;
+const LINK_SALT = "stack-link-v1";          // 通信キーを作るための別の塩
+const RELAY = "https://ntfy.sh/";           // 無料の中継サービス
+const SHOW_SEC = 120;                       // 届いた答えを出しておく秒数
 
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -255,481 +282,551 @@ const REFRESH_MIN = 30;
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   };
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  /* ---------------- 合言葉 ---------------- */
-  async function hashPass(p) {
+  /* ---------------- 合言葉 → 通信キー ---------------- */
+  async function derive(p, salt, bits) {
     const norm = p.normalize("NFKC").trim().replace(/\s+/g, "");
     const enc = new TextEncoder();
     const key = await crypto.subtle.importKey("raw", enc.encode(norm), "PBKDF2", false, ["deriveBits"]);
-    const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: enc.encode(SALT), iterations: 150000, hash: "SHA-256" }, key, 128);
-    return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const b = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: enc.encode(salt), iterations: 150000, hash: "SHA-256" }, key, bits);
+    return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
   }
   const gate = $("gate"), box = $("gateBox"), app = $("app");
+  let TOPIC = null, started = false;
 
   function openApp() {
     gate.hidden = true; app.classList.remove("locked"); app.removeAttribute("aria-hidden");
+    $("keyBox").textContent = TOPIC;
     startMain();
   }
-
   function showLogin() {
     box.innerHTML = `
-      <div class="k">ACCESS CHECK</div>
-      <h1>合言葉をどうぞ</h1>
-      <p>司令室に入るための合言葉よ。</p>
+      <div class="k">ACCESS CHECK</div><h1>合言葉をどうぞ</h1><p>司令室に入るための合言葉よ。</p>
       <form id="f"><input id="pw" type="password" autocomplete="current-password" aria-label="合言葉">
-      <button class="btn" type="submit">解除する</button></form>
-      <div class="note" id="note"></div>`;
+      <button class="btn" type="submit">解除する</button></form><div class="note" id="note"></div>`;
     const pw = $("pw"); pw.focus();
     $("f").onsubmit = async (e) => {
       e.preventDefault();
       if (!pw.value.trim()) return;
-      if ((await hashPass(pw.value)) === PASS_CODE) {
-        store.set("stackPass", PASS_CODE); openApp();
+      if ((await derive(pw.value, SALT, 128)) === PASS_CODE) {
+        TOPIC = "stk" + (await derive(pw.value, LINK_SALT, 96));
+        store.set("stackPass", PASS_CODE); store.set("stackTopic", TOPIC);
+        openApp();
       } else {
         $("note").textContent = "それはぼくのデータにないよ。もう一回ね。";
-        box.classList.remove("shake"); void box.offsetWidth; box.classList.add("shake");
-        pw.select();
+        box.classList.remove("shake"); void box.offsetWidth; box.classList.add("shake"); pw.select();
       }
     };
   }
 
-  function showSetup() {
-    box.innerHTML = `
-      <div class="k">FIRST SETUP</div>
-      <h1>合言葉を決めてね</h1>
-      <p>マヌケで簡単なものでOK。<br>チャットには書かないでね。</p>
-      <form id="f">
-        <input id="p1" type="password" autocomplete="new-password" placeholder="合言葉" aria-label="合言葉">
-        <input id="p2" type="password" autocomplete="new-password" placeholder="もう一回" aria-label="合言葉をもう一回">
-        <button class="btn" type="submit">決定</button></form>
-      <div class="note" id="note"></div>`;
-    $("p1").focus();
-    $("f").onsubmit = async (e) => {
-      e.preventDefault();
-      const a = $("p1").value, b = $("p2").value;
-      if (!a.trim()) { $("note").textContent = "合言葉が空っぽよ。"; return; }
-      if (a !== b) { $("note").textContent = "2つがちがうみたい。もう一回ね。"; return; }
-      const code = await hashPass(a);
-      box.innerHTML = `
-        <div class="k">REGISTERED</div>
-        <h1>登録コードができたよ</h1>
-        <p>下のコードをClaudeに送ってね。<br>これは合言葉そのものではないから、送って大丈夫よ。</p>
-        <div class="code" id="code">${code}</div>
-        <button class="btn" id="cp" type="button">コピーする</button>
-        <div class="note" id="note"></div>
-        <p style="margin-top:14px"><a href="#" id="go" style="color:var(--glow2)">とりあえず中を見る</a></p>`;
-      $("cp").onclick = async () => {
-        try { await navigator.clipboard.writeText(code); $("note").textContent = "コピーしたよ！"; }
-        catch { $("note").textContent = "コードを長押しして選んでね。"; }
-      };
-      $("go").onclick = (ev) => { ev.preventDefault(); openApp(); };
-    };
-  }
-
-  if (!PASS_CODE) showSetup();
-  else if (store.get("stackPass") === PASS_CODE) openApp();
-  else showLogin();
-
   /* ---------------- 時計 ---------------- */
   const WD = ["日", "月", "火", "水", "木", "金", "土"];
-  function jstNow() { return new Date(Date.now() + (new Date().getTimezoneOffset() + 540) * 60000); }
+  const p2 = (x) => String(x).padStart(2, "0");
+  function jst(d = new Date()) { return new Date(d.getTime() + (d.getTimezoneOffset() + 540) * 60000); }
   function tick() {
-    const n = jstNow(), p = (x) => String(x).padStart(2, "0");
-    $("clock").textContent = `${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
-    $("date").textContent = `${n.getFullYear()}.${p(n.getMonth() + 1)}.${p(n.getDate())} ${WD[n.getDay()]}`;
+    const n = jst();
+    $("clock").textContent = `${p2(n.getHours())}:${p2(n.getMinutes())}:${p2(n.getSeconds())}`;
+    $("date").textContent = `${n.getFullYear()}.${p2(n.getMonth() + 1)}.${p2(n.getDate())} ${WD[n.getDay()]}`;
   }
   tick(); setInterval(tick, 1000);
 
-  /* ---------------- スタックの口と声 ---------------- */
-  const mouth = $("mouth"), msgEl = $("msg");
-  let talkTimer = null, lastLine = "";
-  function setMouth(open) { mouth.setAttribute("ry", open ? (3 + Math.random() * 4).toFixed(1) : "1.2"); }
-  function say(text) {
-    lastLine = text;
-    clearInterval(talkTimer);
-    msgEl.classList.remove("done"); msgEl.textContent = "";
-    let i = 0;
-    talkTimer = setInterval(() => {
-      i++;
-      msgEl.textContent = text.slice(0, i);
-      const ch = text[i - 1];
-      setMouth(!/[、。！？…\s]/.test(ch) && i % 2 === 0);
-      if (i >= text.length) { clearInterval(talkTimer); setMouth(false); msgEl.classList.add("done"); }
-    }, 70);
-  }
+  /* ---------------- スタックの口 ---------------- */
+  const mouth = $("mouth");
+  const setMouth = (open) => mouth.setAttribute("ry", open ? (3 + Math.random() * 4).toFixed(1) : "1.2");
+  const eyes = $("eyes");
+  setInterval(() => { eyes.setAttribute("transform", "translate(0 40) scale(1 .1) translate(0 -40)"); setTimeout(() => eyes.removeAttribute("transform"), 140); }, 4200);
   function speakAloud(text) {
-    if (!("speechSynthesis" in window)) return;
+    if (!("speechSynthesis" in window) || !text) return;
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text.replace(/…+/g, "、"));
     u.lang = "ja-JP"; u.rate = 1.05; u.pitch = 1.35;
-    const v = speechSynthesis.getVoices().find((x) => x.lang && x.lang.startsWith("ja"));
-    if (v) u.voice = v;
+    const v = speechSynthesis.getVoices().find((x) => x.lang && x.lang.startsWith("ja")); if (v) u.voice = v;
     let flap = null;
     u.onstart = () => { flap = setInterval(() => setMouth(Math.random() > .35), 110); };
     u.onend = u.onerror = () => { clearInterval(flap); setMouth(false); };
     speechSynthesis.speak(u);
   }
-  $("stackBtn").onclick = () => { if (lastLine) { say(lastLine); speakAloud(lastLine); } };
 
-  // まばたき
-  const eyes = $("eyes");
-  setInterval(() => {
-    eyes.setAttribute("transform", "translate(0 40) scale(1 .1) translate(0 -40)");
-    setTimeout(() => eyes.removeAttribute("transform"), 140);
-  }, 4200);
-
-  /* ---------------- 天気 ---------------- */
-  const dkey = (d) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-  const parse = (t) => { const d = new Date(t); return new Date(d.getTime() + (d.getTimezoneOffset() + 540) * 60000); }; // JSTの壁時計
-  const find = (s, code) => (s && s.areas || []).find((a) => a.area.code === code);
-  const clean = (w) => (w || "").replace(/　/g, " ").replace(/\s+/g, " ").trim();
-
-  function dayInfo(data, target) {
-    const tk = dkey(target), out = {};
-    const short = data[0].timeSeries;
-    const a0 = find(short[0], AREA);
-    if (a0) short[0].timeDefines.forEach((t, i) => {
-      if (!out.text && dkey(parse(t)) === tk) { out.text = clean(a0.weathers && a0.weathers[i]); out.code = a0.weatherCodes && a0.weatherCodes[i]; }
-    });
-    const a1 = find(short[1], AREA);
-    out.pops = {};
-    if (a1) short[1].timeDefines.forEach((t, i) => {
-      const d = parse(t);
-      if (dkey(d) === tk && a1.pops[i] !== "") out.pops[d.getHours()] = +a1.pops[i];
-    });
-    const a2 = find(short[2], TEMP);
-    if (a2) short[2].timeDefines.forEach((t, i) => {
-      const d = parse(t), v = a2.temps[i];
-      if (dkey(d) === tk && v !== "") { if (d.getHours() === 0) out.lo = v; else if (d.getHours() === 9) out.hi = v; }
-    });
-    if (data[1]) {
-      const wk = data[1].timeSeries;
-      const w0 = find(wk[0], WEEK_AREA);
-      if (w0) wk[0].timeDefines.forEach((t, i) => {
-        if (dkey(parse(t)) === tk) {
-          if (!out.code && w0.weatherCodes) out.code = w0.weatherCodes[i];
-          if (!Object.keys(out.pops).length && w0.pops && w0.pops[i] !== "") out.dayPop = +w0.pops[i];
-        }
-      });
-      const w1 = find(wk[1], TEMP);
-      if (w1) wk[1].timeDefines.forEach((t, i) => {
-        if (dkey(parse(t)) === tk) {
-          if (out.lo == null && w1.tempsMin && w1.tempsMin[i]) out.lo = w1.tempsMin[i];
-          if (out.hi == null && w1.tempsMax && w1.tempsMax[i]) out.hi = w1.tempsMax[i];
-        }
-      });
-    }
-    return out;
-  }
-
-  function kind(code, text) {
-    const c = String(code || "")[0];
-    if (c === "4" || /雪/.test(text || "")) return "snow";
-    if (c === "3" || /雨/.test(text || "")) return "rain";
-    if (c === "2") return /晴/.test(text || "") ? "partly" : "cloud";
-    if (c === "1") return /くもり|曇/.test(text || "") ? "partly" : "sun";
-    return "cloud";
-  }
-  function icon(k) {
-    const S = 'fill="none" stroke="#bfe0ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"';
-    const sun = (cx, cy, r) => `<circle cx="${cx}" cy="${cy}" r="${r}" ${S}/>` +
-      [...Array(8)].map((_, i) => { const a = i * Math.PI / 4, r1 = r + 6, r2 = r + 12;
-        return `<line x1="${cx + Math.cos(a) * r1}" y1="${cy + Math.sin(a) * r1}" x2="${cx + Math.cos(a) * r2}" y2="${cy + Math.sin(a) * r2}" ${S}/>`; }).join("");
-    const cloud = `<path d="M24 66 h42 a14 14 0 0 0 0-28 a20 20 0 0 0-38-4 a15 15 0 0 0-4 32z" ${S} fill="rgba(10,30,70,.85)"/>`;
-    const parts = {
-      sun: sun(50, 50, 16),
-      partly: sun(62, 34, 11) + cloud,
-      cloud: cloud,
-      rain: cloud + [30, 46, 62].map((x) => `<line x1="${x}" y1="74" x2="${x - 5}" y2="88" ${S}/>`).join(""),
-      snow: cloud + [30, 48, 66].map((x) => `<g ${S}><line x1="${x - 5}" y1="81" x2="${x + 5}" y2="81"/><line x1="${x}" y1="76" x2="${x}" y2="86"/></g>`).join(""),
-    };
-    return `<svg class="wicon" viewBox="0 0 100 100" aria-hidden="true">${parts[k]}</svg>`;
-  }
-
-  const SLOTS = [0, 6, 12, 18];
-  function maxPop(info) {
-    const v = Object.values(info.pops);
-    return v.length ? Math.max(...v) : (info.dayPop != null ? info.dayPop : null);
-  }
-
-  function render(data) {
-    const now = jstNow();
-    const tmr = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const t = dayInfo(data, now), m = dayInfo(data, tmr);
-    const k = kind(t.code, t.text);
-    const nowH = now.getHours();
-    const bars = SLOTS.map((h) => {
-      const v = t.pops[h];
-      const past = h + 6 <= nowH;
-      if (v == null) return `<div class="bar na"><div class="v">${past ? "済" : "--"}</div><div class="h">${h}-${h + 6}時</div></div>`;
-      return `<div class="bar"><div class="fill" style="height:${v}%"></div><div class="v">${v}%</div><div class="h">${h}-${h + 6}時</div></div>`;
+  /* ---------------- 受信パネル ---------------- */
+  const rx = $("rx");
+  let typeTimer = null, hideTimer = null, current = null;
+  function timeLabel(ms) { const d = jst(new Date(ms)); return `${d.getMonth() + 1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())}`; }
+  function dataRows(data) {
+    if (!data || typeof data !== "object") return "";
+    return Object.entries(data).filter(([, v]) => v !== "" && v != null).slice(0, 14).map(([k, v]) => {
+      const val = typeof v === "object" ? JSON.stringify(v) : String(v);
+      const num = /^[-+]?\d+(\.\d+)?\s*(度|℃|%|％)?$/.test(val.trim());
+      return `<dt>${esc(k)}</dt><dd class="${num ? "num" : ""}">${esc(val)}</dd>`;
     }).join("");
-    const rep = parse(data[0].reportDatetime);
-    $("wx").innerHTML = `
-      <div class="today">
-        ${icon(k)}
-        <div>
-          <div class="wday">TODAY ${now.getMonth() + 1}/${now.getDate()}(${WD[now.getDay()]})</div>
-          <div class="wtext">${t.text || "予報データなし"}</div>
-          <div class="temps">
-            <span><span class="lbl">最高</span><span class="hi">${t.hi ?? "--"}</span><small>℃</small></span>
-            <span><span class="lbl">最低</span><span class="lo">${t.lo ?? "--"}</span><small>℃</small></span>
-          </div>
-        </div>
-      </div>
-      <div class="pops"><div class="cap"><span>降水確率</span><span>RAIN PROB.</span></div><div class="bars">${bars}</div></div>
-      <div class="tomorrow">
-        <span class="wday">明日 ${tmr.getMonth() + 1}/${tmr.getDate()}(${WD[tmr.getDay()]})</span>
-        ${icon(kind(m.code, m.text))}
-        <span>${m.text || "--"}${maxPop(m) != null ? ` <span style="color:var(--dim)">／雨 ${maxPop(m)}%</span>` : ""}</span>
-        <span class="tt"><span class="hi2">${m.hi ?? "--"}</span> / <span class="lo2">${m.lo ?? "--"}</span>℃</span>
-      </div>
-      <div class="src">出典：気象庁（${rep.getMonth() + 1}月${rep.getDate()}日${rep.getHours()}時 長野地方気象台 発表）。天気と降水確率は長野県中部、気温は${TEMP_NAME}の値よ。</div>`;
-    $("live").textContent = "LIVE";
-    return { t, m, k };
   }
-
-  function lineFor({ t, m }) {
-    const now = jstNow(), h = now.getHours();
-    const parts = [];
-    let greet = h < 10 ? "おはよう" : h < 17 ? "おつかれさま" : "おつかれさま、今日もがんばったね";
-    if (Math.random() < 0.2) greet = "りえちゃん…あ。川村さん！ " + greet;
-    else greet = "川村さん、" + greet;
-    parts.push(greet + "。");
-    const useTomorrow = h >= 17;
-    const d = useTomorrow ? m : t;
-    const when = useTomorrow ? "明日" : "今日";
-    if (d.text) parts.push(`${when}の上田は「${d.text.split(" ")[0]}」なのよ。`);
-    if (d.hi != null || d.lo != null) parts.push(`最高${d.hi ?? "?"}度、最低${d.lo ?? "?"}度ね。`);
-    const p = useTomorrow ? maxPop(d) : Math.max(-1, ...SLOTS.filter((s) => s + 6 > h).map((s) => d.pops[s] ?? -1));
-    if (p >= 50) parts.push("傘を忘れないでね。");
-    else if (p >= 30) parts.push("念のため折りたたみ傘があると安心よ。");
-    if (d.lo != null && +d.lo <= 0) parts.push("朝は道が凍ってるかも。足元に気をつけてね。");
-    else if (d.hi != null && +d.hi >= 33) parts.push("すごく暑いから、こまめにお水を飲んでね。");
-    return parts.join("");
+  function show(msg, opts = {}) {
+    current = msg;
+    clearInterval(typeTimer); clearTimeout(hideTimer);
+    $("rxWhen").textContent = timeLabel(msg.time);
+    $("rxTitle").textContent = msg.title || "スタックからの通信";
+    $("rxTitle").hidden = !msg.title;
+    const dl = $("rxData"); dl.innerHTML = dataRows(msg.data); dl.hidden = !dl.innerHTML;
+    const say = $("rxSay"); say.classList.remove("done"); say.textContent = "";
+    rx.classList.add("show");
+    window.__bgPulse && window.__bgPulse();
+    $("st").textContent = "RECEIVING ▸ 受信中";
+    const text = msg.text || "";
+    let i = 0;
+    typeTimer = setInterval(() => {
+      i++; say.textContent = text.slice(0, i);
+      setMouth(!/[、。！？…\s]/.test(text[i - 1] || "") && i % 2 === 0);
+      if (i >= text.length) { clearInterval(typeTimer); setMouth(false); say.classList.add("done"); $("st").textContent = "STANDBY ▸ 通信待機中"; }
+    }, 55);
+    if (opts.voice) speakAloud(text);
+    const bar = $("rxBar");
+    bar.style.transition = "none"; bar.style.transform = "scaleX(1)";
+    requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.transition = `transform ${SHOW_SEC}s linear`; bar.style.transform = "scaleX(0)"; }));
+    hideTimer = setTimeout(hide, SHOW_SEC * 1000);
   }
+  function hide() { rx.classList.remove("show"); clearInterval(typeTimer); setMouth(false); $("st").textContent = "STANDBY ▸ 通信待機中"; }
+  $("rxClose").onclick = hide;
+  $("stackBtn").onclick = () => { const l = getLog()[0]; if (l) show(l, { voice: true }); else speakAloud("いまは待機中よ。ぼくに質問してね。"); };
 
-  let started = false, firstLine = true;
-  async function loadWeather() {
+  /* ---------------- LOG ---------------- */
+  function getLog() { try { return JSON.parse(store.get("stackLog") || "[]"); } catch { return []; } }
+  function addLog(m) {
+    const log = getLog();
+    if (log.some((x) => x.id === m.id)) return false;
+    log.unshift(m); store.set("stackLog", JSON.stringify(log.slice(0, 30))); return true;
+  }
+  function renderLog() {
+    const log = getLog();
+    $("logList").innerHTML = log.length ? log.map((m, i) => `
+      <div class="log-item" data-i="${i}"><div class="w">${esc(timeLabel(m.time))}${m.title ? " ▸ " + esc(m.title) : ""}</div>
+      <div class="s">${esc((m.text || "").slice(0, 80))}${(m.text || "").length > 80 ? "…" : ""}</div></div>`).join("")
+      : `<div class="empty">まだ通信はないよ。スタックに質問すると、ここにたまるの。</div>`;
+    $("logList").querySelectorAll(".log-item").forEach((el) => el.onclick = () => { closeSheets(); show(getLog()[+el.dataset.i]); });
+  }
+  function closeSheets() { document.querySelectorAll(".sheet").forEach((x) => x.hidden = true); }
+  document.querySelectorAll("[data-close]").forEach((b) => b.onclick = closeSheets);
+  document.querySelectorAll(".sheet").forEach((s) => s.addEventListener("click", (e) => { if (e.target === s) closeSheets(); }));
+  $("logBtn").onclick = () => { renderLog(); $("logSheet").hidden = false; };
+  $("setBtn").onclick = () => { $("setNote").textContent = ""; $("setSheet").hidden = false; };
+  $("copyKey").onclick = async () => {
+    try { await navigator.clipboard.writeText(TOPIC); $("setNote").textContent = "コピーしたよ！"; }
+    catch { $("setNote").textContent = "キーを長押しして選んでね。"; }
+  };
+
+  /* ---------------- 中継(ntfy)から受け取る ---------------- */
+  function normalize(n) {
+    // n = ntfy のメッセージ。本文は JSON {title, text, data} か、ただの文字
+    let body = n.message || "", m = {};
+    try { const j = JSON.parse(body); if (j && typeof j === "object") m = j; else m = { text: String(j) }; } catch { m = { text: body }; }
+    return { id: n.id, time: (n.time || Date.now() / 1000) * 1000, title: m.title || n.title || "", text: m.text || "", data: m.data || null };
+  }
+  function receive(n, live) {
+    if (n.event && n.event !== "message") return;
+    const m = normalize(n);
+    if (addLog(m) && live) show(m);
+  }
+  let es = null, retry = 2;
+  function setLink(on) { const el = $("link"); el.textContent = on ? "ONLINE" : "OFFLINE"; el.className = on ? "on" : "off"; window.__bgLink && window.__bgLink(on); }
+  async function catchUp() {
+    // 開いていない間に届いた分を LOG に入れて、10分以内のものは表示
     try {
-      $("live").textContent = "RECEIVING";
-      const r = await fetch(JMA_URL, { cache: "no-store" });
-      if (!r.ok) throw new Error(r.status);
-      const data = await r.json();
-      const info = render(data);
-      store.set("stackWx", JSON.stringify(data));
-      if (firstLine) { say(lineFor(info)); firstLine = false; }
-      else lastLine = lineFor(info);
-    } catch (e) {
-      const cached = store.get("stackWx");
-      if (cached) {
-        try { const info = render(JSON.parse(cached)); $("live").textContent = "OFFLINE"; if (firstLine) { say("通信が切れてるみたい。前に受け取った天気を出してるのよ。"); firstLine = false; } lastLine = lineFor(info); return; } catch {}
-      }
-      $("live").textContent = "NO SIGNAL";
-      $("wx").innerHTML = `<div class="err">気象庁のデータを受け取れなかったよ。<br>電波を確認して、もう一回ためしてね。<br><button class="btn" id="retry" type="button">もう一回</button></div>`;
-      $("retry").onclick = loadWeather;
-      if (firstLine) { say("ごめんね、天気のデータが届かないのよ。それはぼくのデータにない、ってやつね。"); firstLine = false; }
-    }
+      const r = await fetch(`${RELAY}${TOPIC}/json?poll=1&since=12h`);
+      if (!r.ok) return;
+      const lines = (await r.text()).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
+      let latest = null;
+      for (const n of lines) { if (n.event !== "message") continue; const m = normalize(n); addLog(m); if (!latest || m.time > latest.time) latest = m; }
+      if (latest && Date.now() - latest.time < 10 * 60000) show(latest);
+    } catch {}
   }
+  function connect() {
+    if (es) es.close();
+    try { es = new EventSource(`${RELAY}${TOPIC}/sse`); } catch { setLink(false); return; }
+    es.onopen = () => { setLink(true); retry = 2; };
+    es.onmessage = (e) => { try { receive(JSON.parse(e.data), true); } catch {} };
+    es.onerror = () => {
+      setLink(false);
+      if (es.readyState === 2) { setTimeout(connect, retry * 1000); retry = Math.min(retry * 2, 60); }
+    };
+  }
+  async function publish(obj) {
+    const r = await fetch(`${RELAY}${TOPIC}`, { method: "POST", body: JSON.stringify(obj) });
+    if (!r.ok) throw new Error(r.status);
+  }
+
+  /* ---------------- テスト受信 ---------------- */
+  $("testHello").onclick = async () => {
+    $("setNote").textContent = "送信中…";
+    try {
+      await publish({ title: "テスト通信", text: "……アクセス確認。川村さん、聞こえる？ 司令室とつながったのよ。ちょー嬉しい、ちょー嬉しい！" });
+      $("setNote").textContent = "送ったよ。画面に出たら成功ね。"; setTimeout(closeSheets, 600);
+    } catch { $("setNote").textContent = "中継につながらなかったよ。電波を確認してね。"; }
+  };
+  $("testWx").onclick = async () => {
+    $("setNote").textContent = "気象庁に問い合わせ中…";
+    try {
+      const w = await uedaWeather();
+      await publish(w);
+      $("setNote").textContent = "送ったよ。画面に出たら成功ね。"; setTimeout(closeSheets, 600);
+    } catch { $("setNote").textContent = "天気か中継につながらなかったよ。もう一回ためしてね。"; }
+  };
+
+  // テスト用：上田市の天気（気象庁）。本番はスタックの道具プログラムが送る
+  async function uedaWeather(off) {
+    const r = await fetch("https://www.jma.go.jp/bosai/forecast/data/forecast/200000.json", { cache: "no-store" });
+    const data = await r.json();
+    const now = jst(), h = now.getHours(), useT = off == null ? h >= 17 : off === 1;
+    const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (useT ? 1 : 0));
+    const key = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    const tk = key(target), find = (s, c) => (s.areas || []).find((a) => a.area.code === c);
+    const S = data[0].timeSeries, out = {};
+    const a0 = find(S[0], "200020");
+    S[0].timeDefines.forEach((t, i) => { if (!out["天気"] && key(jst(new Date(t))) === tk) out["天気"] = a0.weathers[i].replace(/　/g, " ").replace(/\s+/g, " "); });
+    const a1 = find(S[1], "200020"), pops = [];
+    S[1].timeDefines.forEach((t, i) => { const d = jst(new Date(t)); if (key(d) === tk && a1.pops[i] !== "") pops.push(`${d.getHours()}時〜 ${a1.pops[i]}%`); });
+    if (pops.length) out["降水確率"] = pops.join(" / ");
+    const a2 = find(S[2], "48156");
+    S[2].timeDefines.forEach((t, i) => { const d = jst(new Date(t)); if (key(d) === tk && a2.temps[i] !== "") out[d.getHours() === 0 ? "最低気温" : "最高気温"] = a2.temps[i] + "度"; });
+    if (data[1]) {
+      const w1 = find(data[1].timeSeries[1], "48156");
+      data[1].timeSeries[1].timeDefines.forEach((t, i) => { if (key(jst(new Date(t))) === tk) {
+        if (!out["最低気温"] && w1.tempsMin[i]) out["最低気温"] = w1.tempsMin[i] + "度";
+        if (!out["最高気温"] && w1.tempsMax[i]) out["最高気温"] = w1.tempsMax[i] + "度"; } });
+    }
+    out["出典"] = "気象庁(長野県中部・気温は長野市)";
+    const when = useT ? "明日" : "今日";
+    const text = `${when}の上田は「${(out["天気"] || "").split(" ")[0]}」なのよ。` + (out["最高気温"] ? `最高${out["最高気温"]}、` : "") + (out["最低気温"] ? `最低${out["最低気温"]}ね。` : "");
+    return { title: `上田市の天気(${when} ${target.getMonth() + 1}/${target.getDate()})`, text, data: out };
+  }
+
   function startMain() {
     if (started) return; started = true;
-    loadWeather();
-    setInterval(loadWeather, REFRESH_MIN * 60000);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) loadWeather(); });
+    setLink(false);
+    catchUp().then(connect);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && (!es || es.readyState === 2)) { catchUp(); connect(); } });
   }
-  window.__stackSay = say; // 将来スタックから文字を届ける入口
+  TOPIC = store.get("stackTopic");
+  if (store.get("stackPass") === PASS_CODE && TOPIC) openApp(); else showLogin();
+  /* ---------------- 話しかけ(スマホが小さく読み上げ → スタックが聞き取る) ---------------- */
+  const QUICK = ["おはよう", "今日の天気は？", "明日の天気は？", "今なんじ？", "おつかれさま", "自己紹介して"];
+  $("quick").innerHTML = QUICK.map((q) => `<button class="chip" type="button">${esc(q)}</button>`).join("");
+  $("quick").querySelectorAll("button").forEach((b) => b.onclick = () => talk(b.textContent));
+  ["optWake", "optSay"].forEach((id) => { const v = store.get(id); if (v != null) $(id).checked = v === "1"; $(id).onchange = () => store.set(id, $(id).checked ? "1" : "0"); });
+  function jaVoice() { return speechSynthesis.getVoices().find((x) => x.lang && x.lang.replace("_", "-").startsWith("ja")); }
+  function utter(text) {
+    return new Promise((res) => {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "ja-JP"; u.rate = 0.95; u.pitch = 1; u.volume = 1;
+      const v = jaVoice(); if (v) u.voice = v;
+      const guard = setTimeout(res, 3000 + text.length * 350); // 終わりの合図が来ない端末の保険
+      u.onend = u.onerror = () => { clearTimeout(guard); res(); };
+      speechSynthesis.speak(u);
+    });
+  }
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let talking = false;
+  async function talk(raw) {
+    const text = (raw || "").trim();
+    if (!text || talking) return;
+    if (!("speechSynthesis" in window)) { $("talkSt").textContent = "この端末は読み上げができないみたい"; return; }
+    talking = true; $("talkGo").disabled = true;
+    speechSynthesis.cancel();
+    const line = $("optSay").checked ? `『${text}』って言って` : text;
+    try {
+      if ($("optWake").checked) {
+        $("talkSt").textContent = "▸ 呼びかけ中";
+        await utter("スタック");
+        await wait(1600);   // スタックが目をさますのを待つ
+      }
+      $("talkSt").textContent = "▸ 送話中";
+      await utter(line);
+      $("talkSt").textContent = "▸ 送信完了。スタックの返事を聞いてね";
+      $("talkIn").value = "";
+    } finally {
+      talking = false; $("talkGo").disabled = false;
+      setTimeout(() => { if (!talking) $("talkSt").textContent = ""; }, 6000);
+    }
+  }
+  $("talkForm").onsubmit = (e) => { e.preventDefault(); talk($("talkIn").value); };
+
+  /* ---------------- INFO(ページ自身が調べて出す情報) ---------------- */
+  const WXC = { 100:"晴れ",101:"晴れ時々くもり",102:"晴れ一時雨",103:"晴れ時々雨",104:"晴れ一時雪",105:"晴れ時々雪",110:"晴れのちくもり",111:"晴れのちくもり",112:"晴れのち雨",113:"晴れのち雨",114:"晴れのち雨",115:"晴れのち雪",
+    200:"くもり",201:"くもり時々晴れ",202:"くもり一時雨",203:"くもり時々雨",204:"くもり一時雪",205:"くもり時々雪",206:"くもり一時雨か雪",207:"くもり時々雨か雪",210:"くもりのち晴れ",211:"くもりのち晴れ",212:"くもりのち雨",213:"くもりのち雨",214:"くもりのち雨",215:"くもりのち雪",
+    300:"雨",301:"雨時々晴れ",302:"雨時々止む",303:"雨時々雪",311:"雨のち晴れ",313:"雨のちくもり",314:"雨のち雪",400:"雪",401:"雪時々晴れ",402:"雪時々止む",403:"雪時々雨",411:"雪のち晴れ",413:"雪のちくもり",414:"雪のち雨" };
+  const wxName = (c) => WXC[+c] || ({ 1: "晴れ", 2: "くもり", 3: "雨", 4: "雪" }[String(c)[0]] || "--");
+  const md = (d) => `${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})`;
+  async function jma(path) { const r = await fetch("https://www.jma.go.jp/bosai/" + path, { cache: "no-store" }); if (!r.ok) throw new Error(r.status); return r.json(); }
+
+  async function weekWeather() {
+    const data = await jma("forecast/data/forecast/200000.json");
+    const wk = data[1].timeSeries, a = wk[0].areas.find((x) => x.area.code === "200100") || wk[0].areas[0];
+    const t = wk[1].areas.find((x) => x.area.code === "48156") || wk[1].areas[0];
+    const out = {};
+    wk[0].timeDefines.forEach((tm, i) => {
+      const d = jst(new Date(tm));
+      const lo = t.tempsMin[i], hi = t.tempsMax[i], pop = a.pops[i];
+      out[md(d)] = `${wxName(a.weatherCodes[i])}` + (pop !== "" ? `  雨${pop}%` : "") + (hi || lo ? `  ${lo || "-"}〜${hi || "-"}度` : "");
+    });
+    const firstSnow = Object.values(out).some((v) => /雪/.test(v));
+    return { title: "週間天気(長野県中部・気温は長野市)", text: firstSnow ? "この一週間は雪マークがある日があるのよ。タイヤと足元に気をつけてね。" : "一週間の天気をまとめたよ。", data: out };
+  }
+
+  const WARN = { "02":"暴風雪警報","03":"大雨警報","04":"洪水警報","05":"暴風警報","06":"大雪警報","10":"大雨注意報","12":"大雪注意報","13":"風雪注意報","14":"雷注意報","15":"強風注意報","17":"融雪注意報","18":"洪水注意報","20":"濃霧注意報","21":"乾燥注意報","22":"なだれ注意報","23":"低温注意報","24":"霜注意報","25":"着氷注意報","26":"着雪注意報","32":"暴風雪特別警報","33":"大雨特別警報","35":"暴風特別警報","36":"大雪特別警報" };
+  async function warnings() {
+    const data = await jma("warning/data/warning/200000.json");
+    let city = null;
+    for (const at of data.areaTypes || []) { city = (at.areas || []).find((x) => x.code === "2020300"); if (city) break; }
+    if (!city) return { title: "上田市の警報・注意報", text: "それはぼくのデータにないよ。気象庁の形が変わったのかも。" };
+    const act = (city.warnings || []).filter((w) => w.status && !/解除|なし/.test(w.status) && WARN[w.code]);
+    const rp = jst(new Date(data.reportDatetime));
+    const out = {};
+    act.forEach((w) => { out[WARN[w.code]] = w.status; });
+    out["発表"] = `${rp.getMonth() + 1}月${rp.getDate()}日${rp.getHours()}時 気象庁`;
+    const text = act.length ? `いま上田市には ${act.map((w) => WARN[w.code]).join("、")} が出てるのよ。気をつけてね。` : "いま上田市に警報・注意報は出てないよ。安心してね。";
+    return { title: "上田市の警報・注意報", text, data: out };
+  }
+
+  // 日の出・日の入り(上田市 北緯36.40 東経138.25)と月齢
+  function sunTimes(date, lat = 36.40, lng = 138.25) {
+    const rad = Math.PI / 180, day = 86400000, J1970 = 2440588, J2000 = 2451545;
+    const toJ = (d) => d.valueOf() / day - .5 + J1970, fromJ = (j) => new Date((j + .5 - J1970) * day);
+    const d = toJ(date) - J2000, lw = rad * -lng, phi = rad * lat;
+    const n = Math.round(d - .0009 - lw / (2 * Math.PI));
+    const ds = .0009 + lw / (2 * Math.PI) + n;
+    const M = rad * (357.5291 + .98560028 * ds);
+    const C = rad * (1.9148 * Math.sin(M) + .02 * Math.sin(2 * M) + .0003 * Math.sin(3 * M));
+    const L = M + C + rad * 102.9372 + Math.PI;
+    const dec = Math.asin(Math.sin(L) * Math.sin(rad * 23.4397));
+    const Jnoon = J2000 + ds + .0053 * Math.sin(M) - .0069 * Math.sin(2 * L);
+    const w = Math.acos((Math.sin(rad * -.833) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec)));
+    const a = .0009 + (w + lw) / (2 * Math.PI) + n;
+    const Jset = J2000 + a + .0053 * Math.sin(M) - .0069 * Math.sin(2 * L);
+    return { rise: fromJ(Jnoon - (Jset - Jnoon)), set: fromJ(Jset) };
+  }
+  function sky() {
+    const now = new Date(), st = sunTimes(now);
+    const hm = (d) => { const j = jst(d); return `${j.getHours()}時${p2(j.getMinutes())}分`; };
+    const age = (((now - Date.UTC(2000, 0, 6, 18, 14)) / 86400000) % 29.530588 + 29.530588) % 29.530588;
+    const names = [[1, "新月"], [3.5, "三日月"], [6, "三日月すぎ"], [9, "上弦の月"], [13, "十三夜"], [16, "満月"], [20, "立待月〜寝待月"], [24, "下弦の月"], [28, "有明の月"], [30, "新月"]];
+    const name = names.find(([lim]) => age < lim)[1];
+    const len = (st.set - st.rise) / 60000;
+    return { title: "日の出・日の入りと月(上田市)", text: `今日の日の出は${hm(st.rise)}、日の入りは${hm(st.set)}よ。月は「${name}」ね。`,
+      data: { "日の出": hm(st.rise), "日の入り": hm(st.set), "昼の長さ": `${Math.floor(len / 60)}時間${Math.round(len % 60)}分`, "月齢": age.toFixed(1), "月": name } };
+  }
+
+  // やることメモ(この端末だけに保存)
+  function getMemo() { try { return JSON.parse(store.get("stackMemo") || "[]"); } catch { return []; } }
+  function setMemo(m) { store.set("stackMemo", JSON.stringify(m)); }
+  function renderMemo() {
+    const m = getMemo();
+    $("memoList").innerHTML = m.length ? m.map((x, i) => `<div class="log-item" style="display:flex;gap:10px;align-items:center;cursor:default">
+      <span class="s" style="flex:1">${esc(x)}</span><button class="chip" data-del="${i}" type="button">完了</button></div>`).join("")
+      : `<div class="empty">メモはまだないよ。</div>`;
+    $("memoList").querySelectorAll("[data-del]").forEach((b) => b.onclick = () => { const a = getMemo(); a.splice(+b.dataset.del, 1); setMemo(a); renderMemo(); });
+  }
+  $("memoForm").onsubmit = (e) => { e.preventDefault(); const v = $("memoIn").value.trim(); if (!v) return; const a = getMemo(); a.push(v); setMemo(a); $("memoIn").value = ""; renderMemo(); };
+  function memoCard() {
+    const m = getMemo(), data = {};
+    m.slice(0, 14).forEach((x, i) => { data[`${i + 1}`] = x; });
+    return { title: "やることメモ", text: m.length ? `やることは${m.length}つあるのよ。ひとつずつ片づけようね。` : "やることメモは空っぽよ。今日はのんびりできるね。", data: m.length ? data : null };
+  }
+
+  async function info(kind) {
+    $("infoNote").textContent = "調べてるよ…";
+    try {
+      let card;
+      if (kind === "today") card = await uedaWeather(0);
+      else if (kind === "tomorrow") card = await uedaWeather(1);
+      else if (kind === "week") card = await weekWeather();
+      else if (kind === "warn") card = await warnings();
+      else if (kind === "sky") card = sky();
+      else if (kind === "memo") { closeSheets(); renderMemo(); $("memoSheet").hidden = false; show({ id: "local" + Date.now(), time: Date.now(), ...memoCard() }); return; }
+      closeSheets();
+      const m = { id: "local" + Date.now(), time: Date.now(), ...card };
+      addLog(m); show(m);
+    } catch { $("infoNote").textContent = "データを受け取れなかったよ。電波を確認してもう一回ね。"; }
+  }
+  $("infoBtn").onclick = () => { $("infoNote").textContent = ""; $("infoSheet").hidden = false; };
+  document.querySelectorAll("[data-info]").forEach((b) => b.onclick = () => info(b.dataset.info));
+
+  window.__stackShow = (m) => show({ id: "local" + Date.now(), time: Date.now(), ...m }); // 手元での確認用
 })();
 
 /* =========================================================
-   背景（飾り）: 青く光る雲・漂う破片・走査線・薄い円
-   ＋ 両端に流れる数字の列、浮かぶ小さなグラフと波形
+   背景(飾り): 銀河の星雲 / 星空 / 光の糸 / 横の線 / 薄い目盛りリング
    ========================================================= */
 (() => {
   const cv = document.getElementById("bg");
   const ctx = cv.getContext("2d");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let W, H, R, cx, cy, dpr, small;
-
-  const sprite = document.createElement("canvas");
-  sprite.width = sprite.height = 64;
-  const sg = sprite.getContext("2d");
-  const g = sg.createRadialGradient(32, 32, 0, 32, 32, 32);
-  g.addColorStop(0, "rgba(160,205,255,1)");
-  g.addColorStop(0.25, "rgba(70,140,255,0.55)");
-  g.addColorStop(1, "rgba(20,60,200,0)");
-  sg.fillStyle = g; sg.fillRect(0, 0, 64, 64);
-
   const rnd = (a, b) => a + Math.random() * (b - a);
-  const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
-  const lobes = [[0,0,1],[-.35,-.15,.7],[.4,-.1,.65],[.05,.35,.6],[-.2,.3,.5],[.3,.3,.45]];
-  let neb = [], shards = [], bubbles = [], streaks = [], cols = [], widgets = [];
+  const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
   const HEX = "0123456789ABCDEF";
   const randStr = (n) => Array.from({ length: n }, () => HEX[(Math.random() * 16) | 0]).join("");
 
+  function makeSprite(stops) {
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const x = c.getContext("2d"), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    stops.forEach(([o, col]) => g.addColorStop(o, col));
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64); return c;
+  }
+  const blue = makeSprite([[0, "rgba(120,170,255,1)"], [.3, "rgba(50,110,255,.5)"], [1, "rgba(20,50,200,0)"]]);
+  const white = makeSprite([[0, "rgba(255,255,255,1)"], [.25, "rgba(200,225,255,.6)"], [1, "rgba(120,170,255,0)"]]);
+
+  let lobes = [], neb = [], dust = [], stars = [], strings = [], cols = [];
+  let pulse = 0, linked = false;
+  window.__bgPulse = () => { pulse = 1; };
+  window.__bgLink = (on) => { linked = on; };
+
   function build() {
     small = Math.min(W, H) < 600;
+    // 星雲: もこもこした雲のかたまり(いくつもの玉の集まり)
+    lobes = [];
+    const nL = 16;
+    for (let i = 0; i < nL; i++) {
+      const a = rnd(0, 6.28), d = Math.pow(Math.random(), .8) * .55;
+      lobes.push({ x: Math.cos(a) * d * 1.15, y: Math.sin(a) * d * .7 - .05, r: rnd(.16, .34) * (i < 4 ? 1.4 : 1), ph: rnd(0, 6.28), sp: rnd(.15, .35) });
+    }
     neb = [];
-    const N = small ? 600 : 1000;
+    const N = small ? 900 : 1500;
     for (let i = 0; i < N; i++) {
-      const L = lobes[i % lobes.length];
-      const ox = L[0] + gauss() * .7 * L[2], oy = L[1] * .8 + gauss() * .55 * L[2];
-      neb.push({ a: Math.atan2(oy, ox), r: Math.hypot(ox, oy), s: rnd(.15, 1.1) * (Math.random() < .08 ? 2.2 : 1),
-        al: rnd(.04, .16), sp: rnd(-.02, .02), ph: rnd(0, 6.28) });
+      const L = lobes[i % nL], ox = gauss() * L.r * .45, oy = gauss() * L.r * .38;
+      const dist = Math.hypot(L.x + ox, (L.y + oy) * 1.3);
+      neb.push({ L, ox, oy, s: rnd(small ? .08 : .06, small ? .26 : .22) * (Math.random() < .06 ? 2.2 : 1), al: rnd(.05, .16), ph: rnd(0, 6.28),
+        wh: Math.random() < Math.max(.06, .5 - dist * 1.1) });   // 中心ほど白い
     }
-    shards = []; for (let i = 0; i < (small ? 50 : 90); i++) shards.push(newShard(true));
-    bubbles = []; for (let i = 0; i < 14; i++) bubbles.push({ x: rnd(-1.4, 1.4), y: rnd(-.9, .9), r: rnd(.008, .03), v: rnd(.002, .006) });
-    streaks = []; for (let i = 0; i < 7; i++) streaks.push({ y: rnd(-.6, .6), x: rnd(-1, 1), len: rnd(.15, .5), v: rnd(.02, .07) * (Math.random() < .5 ? -1 : 1) });
-    // 流れる数字の列（左右の端）
+    dust = [];
+    for (let i = 0; i < (small ? 500 : 900); i++) {
+      const L = lobes[i % nL];
+      dust.push({ L, ox: gauss() * L.r * .5, oy: gauss() * L.r * .42, ph: rnd(0, 6.28), sz: Math.random() < .1 ? 2 : 1.1 });
+    }
+    // 星空(3つの奥行き)
+    stars = [];
+    for (let i = 0; i < (small ? 220 : 420); i++) {
+      const z = Math.random();
+      stars.push({ x: rnd(0, W), y: rnd(0, H), z, r: .4 + z * 1.2, ph: rnd(0, 6.28), tw: rnd(.6, 2.4) });
+    }
+    // 光の糸: 画面を横切る細い線(少し角度がついて、中央に向かって集まる)
+    strings = [];
+    for (let i = 0; i < (small ? 18 : 30); i++) {
+      const left = Math.random() < .5;
+      const y0 = rnd(.05, .95) * H, y1 = cy + rnd(-.35, .35) * H;
+      strings.push({ x0: left ? -20 : W + 20, y0, x1: left ? W * rnd(.55, 1.1) : W * rnd(-.1, .45), y1,
+        al: rnd(.05, .16), glint: Math.random(), gv: rnd(.04, .12) });
+    }
     cols = [];
-    const nCol = small ? 3 : 6, fs = small ? 10 : 12;
+    const nCol = small ? 2 : 4, fs = small ? 10 : 12;
     for (let i = 0; i < nCol; i++) {
-      const left = i % 2 === 0, k = Math.floor(i / 2);
-      cols.push({ x: left ? 6 + k * fs * 1.1 : W - 14 - k * fs * 1.1, y: rnd(0, H), v: rnd(18, 45), fs,
-        chars: randStr(Math.ceil(H / fs) + 4), al: rnd(.12, .3) });
+      const lft = i % 2 === 0, k = Math.floor(i / 2);
+      cols.push({ x: lft ? 6 + k * fs * 1.2 : W - 14 - k * fs * 1.2, y: rnd(0, H), v: rnd(20, 45), fs, chars: randStr(Math.ceil(H / fs) + 4), al: rnd(.08, .18) });
     }
-    // 浮かぶ小さいグラフ（意味なし）
-    widgets = [];
-    const wW = small ? 96 : 150, wH = small ? 40 : 56;
-    const spots = small ? [[.06, .12]] : [[.06, .2], [.78, .16], [.05, .72], [.8, .7]];
-    spots.forEach(([fx, fy], i) => widgets.push({ x: fx * W, y: fy * H, w: wW, h: wH, type: i % 2 ? "bars" : "wave",
-      ph: rnd(0, 6), data: Array.from({ length: 12 }, () => rnd(.2, 1)), label: randStr(4) + "-" + randStr(2) }));
   }
-
-  function newShard(anywhere) {
-    const n = Math.floor(rnd(4, 7)), pts = [];
-    for (let k = 0; k < n; k++) { const t = k / n * 6.28 + rnd(-.3, .3); pts.push([Math.cos(t) * rnd(.6, 1), Math.sin(t) * rnd(.6, 1)]); }
-    const a = rnd(0, 6.28), d = anywhere ? Math.pow(Math.random(), .7) * 1.1 : rnd(.05, .3);
-    return { x: Math.cos(a) * d * 1.3, y: Math.sin(a) * d * .9, pts, size: rnd(.006, .022) * (Math.random() < .12 ? 2 : 1),
-      rot: rnd(0, 6.28), vr: rnd(-.25, .25), vx: Math.cos(a) * rnd(.004, .014), vy: Math.sin(a) * rnd(.003, .01),
-      warm: Math.random() < .35, al: rnd(.45, .95) };
-  }
-
   function resize() {
     dpr = Math.min(devicePixelRatio || 1, 2);
     W = innerWidth; H = innerHeight;
-    cv.width = W * dpr; cv.height = H * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    cx = W / 2; cy = H / 2; R = Math.min(W, H) * (W < H ? .55 : .42);
+    cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cx = W / 2; cy = H * .44; R = Math.min(W, H) * (W < H ? .62 : .48);
     build();
   }
 
   let last = 0;
   function frame(t) {
     const time = t / 1000, dt = Math.min(.05, last ? time - last : 1 / 60); last = time;
-    const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * .75);
-    bg.addColorStop(0, "#0a1c44"); bg.addColorStop(.45, "#06122a"); bg.addColorStop(1, "#02040b");
+    pulse = Math.max(0, pulse - dt * .45);
     ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+    const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * .8);
+    bg.addColorStop(0, "#071430"); bg.addColorStop(.5, "#030a1c"); bg.addColorStop(1, "#010309");
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 
-    // 薄い円
-    ctx.strokeStyle = "rgba(110,160,255,0.10)"; ctx.lineWidth = 1;
-    for (const k of [.78, 1.02]) { ctx.beginPath(); ctx.arc(cx, cy, R * k, 0, 6.28); ctx.stroke(); }
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(time * .05);
-    ctx.setLineDash([2, 10]); ctx.strokeStyle = "rgba(140,190,255,0.16)";
-    ctx.beginPath(); ctx.arc(0, 0, R * .9, 0, 6.28); ctx.stroke(); ctx.restore(); ctx.setLineDash([]);
+    // 星空
+    for (const s of stars) {
+      s.x -= (2 + s.z * 6) * dt; if (s.x < -2) { s.x = W + 2; s.y = rnd(0, H); }
+      const a = (.25 + .75 * s.z) * (.55 + .45 * Math.sin(time * s.tw + s.ph));
+      ctx.fillStyle = `rgba(${200 + s.z * 55 | 0},${220 + s.z * 35 | 0},255,${a})`;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.283); ctx.fill();
+    }
 
-    // 流れる数字
-    ctx.font = `${small ? 10 : 12}px "Share Tech Mono", monospace`;
+    // 横の線(奥の壁)
+    ctx.lineWidth = 1;
+    for (let k = -9; k <= 9; k++) {
+      const y = cy + k * H * .045;
+      ctx.strokeStyle = `rgba(140,180,255,${.05 + .04 * (1 - Math.abs(k) / 9)})`;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+    // 光の糸と、その上を走る光
+    for (const s of strings) {
+      ctx.strokeStyle = `rgba(190,215,255,${s.al})`;
+      ctx.beginPath(); ctx.moveTo(s.x0, s.y0); ctx.lineTo(s.x1, s.y1); ctx.stroke();
+      s.glint = (s.glint + s.gv * dt) % 1;
+      const gx = s.x0 + (s.x1 - s.x0) * s.glint, gy = s.y0 + (s.y1 - s.y0) * s.glint;
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = .5; ctx.drawImage(white, gx - 5, gy - 5, 10, 10); ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    // 数字の列(うっすら)
+    ctx.font = `${small ? 10 : 12}px "Share Tech Mono", monospace`; ctx.textAlign = "left";
     for (const c of cols) {
       c.y += c.v * dt; if (c.y > c.fs * 4) { c.y -= c.fs; c.chars = HEX[(Math.random() * 16) | 0] + c.chars.slice(0, -1); }
       for (let i = 0; i < c.chars.length; i++) {
         const y = c.y + (i - 4) * c.fs; if (y < -c.fs || y > H + c.fs) continue;
-        ctx.fillStyle = i === 4 ? `rgba(210,235,255,${c.al + .3})` : `rgba(90,160,255,${c.al * (1 - i / c.chars.length * .6)})`;
-        ctx.fillText(c.chars[i], c.x, y);
+        ctx.fillStyle = `rgba(90,160,255,${c.al * (1 - i / c.chars.length * .6)})`; ctx.fillText(c.chars[i], c.x, y);
       }
     }
 
-    // 雲（加算合成）
-    ctx.globalCompositeOperation = "lighter";
-    const breathe = 1 + Math.sin(time * .4) * .025;
-    for (const p of neb) {
-      const a = p.a + time * p.sp, rr = p.r * breathe * (1 + Math.sin(time * .7 + p.ph) * .02);
-      const x = cx + Math.cos(a) * rr * R, y = cy + Math.sin(a) * rr * R * .85, s = p.s * R * .32;
-      ctx.globalAlpha = p.al * (.85 + Math.sin(time * 1.3 + p.ph) * .15);
-      ctx.drawImage(sprite, x - s / 2, y - s / 2, s, s);
+    // 薄い目盛りリング(司令室らしさ)
+    ctx.save(); ctx.translate(cx, cy);
+    const rr = R * 1.02 * (1 + pulse * .06);
+    ctx.rotate(time * .03);
+    for (let i = 0; i < 180; i++) {
+      const a = i / 180 * 6.283, lg = i % 15 === 0;
+      ctx.strokeStyle = `rgba(150,195,255,${lg ? .22 : .08})`;
+      ctx.beginPath(); ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); ctx.lineTo(Math.cos(a) * (rr - (lg ? 9 : 4)), Math.sin(a) * (rr - (lg ? 9 : 4))); ctx.stroke();
     }
+    ctx.rotate(-time * .1);
+    ctx.strokeStyle = `rgba(120,175,255,${.16 + pulse * .4})`; ctx.lineWidth = 1.5;
+    for (const [a0, a1] of [[.2, 1.3], [2.1, 2.6], [3.4, 4.9], [5.4, 5.9]]) { ctx.beginPath(); ctx.arc(0, 0, R * .9, a0, a1); ctx.stroke(); }
+    ctx.lineWidth = 1; ctx.restore();
+
+    // 星雲(加算合成)
+    ctx.globalCompositeOperation = "lighter";
+    const boost = 1 + pulse * 1.4, dim = linked ? 1 : .85;
+    for (const L of lobes) { L.cx = L.x + Math.sin(time * L.sp * .3 + L.ph) * .025; L.cy = L.y + Math.cos(time * L.sp * .25 + L.ph) * .02; }
+    for (const p of neb) {
+      const L = p.L, sw = Math.sin(time * L.sp + p.ph) * .012;
+      const x = cx + (L.cx + p.ox + sw) * R, y = cy + (L.cy + p.oy - sw) * R;
+      const s = p.s * R * (1 + pulse * .3);
+      ctx.globalAlpha = Math.min(1, p.al * boost * dim * (p.wh ? .7 : 1));
+      ctx.drawImage(p.wh ? white : blue, x - s / 2, y - s / 2, s, s);
+    }
+    // きらきらした細かい粒
     ctx.globalAlpha = 1;
-    for (let i = 0; i < neb.length; i += 9) {
-      const p = neb[i], a = p.a + time * p.sp;
-      const x = cx + Math.cos(a) * p.r * breathe * R, y = cy + Math.sin(a) * p.r * breathe * R * .85;
-      ctx.fillStyle = `rgba(190,225,255,${.25 + .35 * Math.abs(Math.sin(time * 2 + p.ph))})`;
-      ctx.fillRect(x, y, 1.2, 1.2);
+    for (const d of dust) {
+      const L = d.L, x = cx + (L.cx + d.ox) * R, y = cy + (L.cy + d.oy) * R;
+      const a = .25 + .6 * Math.abs(Math.sin(time * 1.7 + d.ph));
+      ctx.fillStyle = `rgba(235,245,255,${a * dim})`; ctx.fillRect(x, y, d.sz, d.sz);
     }
     ctx.globalCompositeOperation = "source-over";
 
-    // 走査線と流れる光
-    for (let y = -0.62; y <= 0.62; y += 0.031) {
-      const yy = cy + y * R * 1.3, fade = 1 - Math.abs(y) / .7;
-      ctx.strokeStyle = `rgba(150,190,255,${.05 + .06 * fade})`;
-      ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy + Math.sin(y * 9) * 2); ctx.stroke();
-    }
-    for (const s of streaks) {
-      s.x += s.v * dt; if (s.x > 1.6) s.x = -1.6; if (s.x < -1.6) s.x = 1.6;
-      const x0 = cx + s.x * R * 1.5, yy = cy + s.y * R * 1.3, L = s.len * R;
-      const lg = ctx.createLinearGradient(x0 - L, 0, x0 + L, 0);
-      lg.addColorStop(0, "rgba(180,215,255,0)"); lg.addColorStop(.5, "rgba(200,230,255,.55)"); lg.addColorStop(1, "rgba(180,215,255,0)");
-      ctx.strokeStyle = lg; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(x0 - L, yy); ctx.lineTo(x0 + L, yy); ctx.stroke();
-    }
-
-    // 泡
-    ctx.strokeStyle = "rgba(170,205,255,0.35)";
-    for (const b of bubbles) {
-      b.y -= b.v * dt; if (b.y < -1) b.y = 1;
-      ctx.beginPath(); ctx.arc(cx + b.x * R, cy + b.y * R, b.r * R, 0, 6.28); ctx.stroke();
-    }
-
-    // 破片
-    for (let i = 0; i < shards.length; i++) {
-      const s = shards[i];
-      s.x += s.vx * dt; s.y += s.vy * dt; s.rot += s.vr * dt;
-      if (Math.abs(s.x) > 1.7 || Math.abs(s.y) > 1.2) { shards[i] = newShard(false); continue; }
-      const x = cx + s.x * R, y = cy + s.y * R, z = s.size * R, dist = Math.hypot(s.x, s.y);
-      ctx.save(); ctx.translate(x, y); ctx.rotate(s.rot);
-      ctx.globalAlpha = s.al * Math.min(1, dist * 4) * Math.max(0, 1 - (dist - 1.2) * 2);
-      ctx.fillStyle = s.warm ? "#efe6d6" : "#dfeaff";
-      ctx.beginPath(); s.pts.forEach(([px, py], k) => k ? ctx.lineTo(px * z, py * z) : ctx.moveTo(px * z, py * z));
-      ctx.closePath(); ctx.fill(); ctx.restore();
-    }
-    ctx.globalAlpha = 1;
-
-    // 浮かぶグラフ
-    ctx.font = `9px "Share Tech Mono", monospace`;
-    for (const w of widgets) {
-      const fy = w.y + Math.sin(time * .3 + w.ph) * 6;
-      ctx.strokeStyle = "rgba(110,170,255,.22)"; ctx.lineWidth = 1;
-      ctx.strokeRect(w.x, fy, w.w, w.h);
-      ctx.fillStyle = "rgba(120,175,255,.45)"; ctx.fillText(w.label, w.x + 4, fy - 4);
-      if (w.type === "wave") {
-        ctx.beginPath();
-        for (let i = 0; i <= 40; i++) {
-          const px = w.x + i / 40 * w.w;
-          const py = fy + w.h / 2 + Math.sin(i * .5 + time * 2.2 + w.ph) * w.h * .28 * Math.sin(i * .09 + time * .5);
-          i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
-        }
-        ctx.strokeStyle = "rgba(150,205,255,.55)"; ctx.stroke();
-      } else {
-        const n = w.data.length, bw = w.w / n;
-        if (Math.random() < .03) { w.data.shift(); w.data.push(rnd(.15, 1)); }
-        w.data.forEach((v, i) => {
-          const hh = v * (w.h - 8) * (.9 + .1 * Math.sin(time * 3 + i));
-          ctx.fillStyle = "rgba(90,160,255,.4)";
-          ctx.fillRect(w.x + i * bw + 2, fy + w.h - 3 - hh, bw - 4, hh);
-        });
+    // 受信時の波紋
+    if (pulse > 0) {
+      for (let k = 0; k < 3; k++) {
+        const tt = (1 - pulse) * 1.4 + k * .18; if (tt > 1) continue;
+        ctx.strokeStyle = `rgba(170,210,255,${(1 - tt) * .6})`; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(cx, cy, R * (.2 + tt * 1.1), 0, 6.283); ctx.stroke();
       }
+      ctx.lineWidth = 1;
     }
 
     // 周辺を暗く
-    const vg = ctx.createRadialGradient(cx, cy, Math.min(W, H) * .3, cx, cy, Math.max(W, H) * .8);
-    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.65)");
+    const vg = ctx.createRadialGradient(cx, cy, Math.min(W, H) * .35, cx, cy, Math.max(W, H) * .85);
+    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.55)");
     ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
 
     if (!reduce) requestAnimationFrame(frame);
   }
-
   addEventListener("resize", resize);
-  resize();
-  requestAnimationFrame(frame);
+  resize(); requestAnimationFrame(frame);
 })();
 </script>
 </body>
