@@ -92,8 +92,12 @@
   .status { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; color: var(--dim); line-height: 1.9; }
   .status .st::before { content: "●"; margin-right: 6px; color: var(--glow2); animation: blink 1.6s steps(2) infinite; }
   .btns { display: flex; gap: 8px; margin-top: 6px; }
-  .stack { width: 78px; flex: 0 0 auto; cursor: pointer; background: none; border: 0; padding: 0; color: inherit; }
-  .stack svg { width: 100%; height: auto; display: block; filter: drop-shadow(0 0 10px rgba(61,139,255,.55)); }
+  .stack { width: 86px; flex: 0 0 auto; cursor: pointer; background: none; border: 0; padding: 0; color: inherit; }
+  .stack .chara { position: relative; display: block; }
+  .stack .chara img { width: 100%; height: auto; display: block; filter: drop-shadow(0 0 10px rgba(61,139,255,.55)); -webkit-user-drag: none; user-select: none; pointer-events: none; }
+  .stack .mouth { position: absolute; left: 43.84%; width: 11.71%; top: 40.81%; height: 3.9%;
+    background: radial-gradient(ellipse at 50% 85%, #3a2a2a 0%, #0b0b0d 60%); border-radius: 12% 12% 50% 50% / 18% 18% 82% 82%;
+    transform-origin: 50% 0; transition: transform .07s; }
   .stack .cap { font-family: var(--mono); font-size: 9px; letter-spacing: .14em; color: var(--dim); text-align: center; margin-top: 2px; }
 
   button.btn, button.chip {
@@ -162,7 +166,7 @@
     .rx { padding: 12px 14px; }
     .rx h2 { font-size: 16px; }
     .rx .say { font-size: 14px; }
-    .stack { width: 66px; }
+    .stack { width: 74px; }
   }
   @media (prefers-reduced-motion: reduce) { .status .st::before, .rx .say::after { animation: none; } }
 </style>
@@ -213,20 +217,7 @@
       </div>
     </div>
     <button class="stack" id="stackBtn" type="button" aria-label="スタック（押すと最後の答えをもう一度）">
-      <svg viewBox="0 0 100 110" aria-hidden="true">
-        <defs><linearGradient id="shell" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2f5c"/><stop offset="1" stop-color="#0a1530"/></linearGradient></defs>
-        <rect x="26" y="78" width="48" height="24" rx="8" fill="url(#shell)" stroke="#5c9bff" stroke-width="1.5"/>
-        <rect x="18" y="96" width="22" height="9" rx="4" fill="#0e1c3e" stroke="#5c9bff" stroke-width="1.2"/>
-        <rect x="60" y="96" width="22" height="9" rx="4" fill="#0e1c3e" stroke="#5c9bff" stroke-width="1.2"/>
-        <circle cx="50" cy="90" r="3" fill="#7fb6ff"><animate attributeName="opacity" values="1;.25;1" dur="2.4s" repeatCount="indefinite"/></circle>
-        <rect x="8" y="10" width="84" height="68" rx="14" fill="url(#shell)" stroke="#7fb6ff" stroke-width="2"/>
-        <path d="M8 40 h-4 v16 h4" fill="none" stroke="#7fb6ff" stroke-width="2"/>
-        <path d="M4 54 q0 14 18 16" fill="none" stroke="#7fb6ff" stroke-width="1.5"/>
-        <circle cx="23" cy="70" r="2.2" fill="#7fb6ff"/>
-        <rect x="16" y="18" width="68" height="52" rx="8" fill="#030914"/>
-        <g id="eyes" fill="#d6e8ff"><rect x="30" y="34" width="9" height="12" rx="4.5"/><rect x="61" y="34" width="9" height="12" rx="4.5"/></g>
-        <ellipse id="mouth" cx="50" cy="56" rx="8" ry="1.2" fill="#d6e8ff"/>
-      </svg>
+      <span class="chara" aria-hidden="true"><img src="stack-chara.png" alt="" width="251" height="360" decoding="async"><span class="mouth" id="mouth"></span></span>
       <div class="cap">STACK</div>
     </button>
   </footer>
@@ -284,7 +275,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "2.8";
+const PAGE_VER = "2.9";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -363,9 +354,9 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
 
   /* ---------------- スタックの口 ---------------- */
   const mouth = $("mouth");
-  const setMouth = (open) => mouth.setAttribute("ry", open ? (3 + Math.random() * 4).toFixed(1) : "1.2");
-  const eyes = $("eyes");
-  setInterval(() => { eyes.setAttribute("transform", "translate(0 40) scale(1 .1) translate(0 -40)"); setTimeout(() => eyes.removeAttribute("transform"), 140); }, 4200);
+  // 口: ふだんはにっこり、話している間はパクパク
+  const setMouth = (open) => { mouth.style.transform = open ? `scale(${(0.95 + Math.random() * 0.2).toFixed(2)}, ${(1.0 + Math.random() * 0.45).toFixed(2)})` : "scale(.9, .22)"; };
+  const mouthIdle = () => { mouth.style.transform = "none"; };
   let speakTok = 0;
   function speakAloud(text) {
     if (!("speechSynthesis" in window) || !text) return;
@@ -376,7 +367,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     const v = speechSynthesis.getVoices().find((x) => x.lang && x.lang.startsWith("ja")); if (v && v.localService !== false) u.voice = v;
     let flap = null;
     u.onstart = () => { flap = setInterval(() => setMouth(Math.random() > .35), 110); };
-    const tok = ++speakTok, done = () => { clearInterval(flap); setMouth(false); if (tok === speakTok && typeof micPause === "function") micPause(false); };
+    const tok = ++speakTok, done = () => { clearInterval(flap); mouthIdle(); if (tok === speakTok && typeof micPause === "function") micPause(false); };
     u.onend = u.onerror = done;
     setTimeout(done, 4000 + text.length * 350); // 終わりの合図が来ない端末の保険
     if (typeof micPause === "function") micPause(true);
@@ -411,7 +402,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     typeTimer = setInterval(() => {
       i++; say.textContent = text.slice(0, i);
       setMouth(!/[、。！？…\s]/.test(text[i - 1] || "") && i % 2 === 0);
-      if (i >= text.length) { clearInterval(typeTimer); setMouth(false); say.classList.add("done"); $("st").textContent = "STANDBY ▸ 通信待機中"; }
+      if (i >= text.length) { clearInterval(typeTimer); mouthIdle(); say.classList.add("done"); $("st").textContent = "STANDBY ▸ 通信待機中"; }
     }, 55);
     if (opts.voice) speakAloud(text);
     const bar = $("rxBar");
@@ -419,7 +410,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.transition = `transform ${SHOW_SEC}s linear`; bar.style.transform = "scaleX(0)"; }));
     hideTimer = setTimeout(hide, SHOW_SEC * 1000);
   }
-  function hide() { rx.classList.remove("show"); clearInterval(typeTimer); setMouth(false); $("st").textContent = "STANDBY ▸ 通信待機中"; }
+  function hide() { rx.classList.remove("show"); clearInterval(typeTimer); mouthIdle(); $("st").textContent = "STANDBY ▸ 通信待機中"; }
   $("rxClose").onclick = hide;
   $("stackBtn").onclick = () => { const l = getLog()[0]; if (l) show(l, { voice: true }); else speakAloud("いまは待機中よ。ぼくに質問してね。"); };
 
