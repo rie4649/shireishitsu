@@ -275,7 +275,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "2.9";
+const PAGE_VER = "3.0";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -294,7 +294,8 @@ const PAGE_VER = "2.9";
 const PASS_CODE = "dcbbd13c783a25d504eed386ea8c7e7d";
 const SALT = "stack-shireishitsu-v1";
 const LINK_SALT = "stack-link-v1";          // 通信キーを作るための別の塩
-const RELAY = "https://ntfy.sh/";           // 無料の中継サービス
+const RELAY = "https://ntfy.sh/";           // 無料の中継サービス(画面からのテスト送信用)
+const BRAIN_BOX = "https://storage.googleapis.com/stack-515204-screen/"; // スタックの頭脳サーバーが会話を置く場所
 const SHOW_SEC = 120;                       // 届いた答えを出しておく秒数
 
 (() => {
@@ -470,9 +471,31 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     es.onopen = () => { setLink(true); retry = 2; };
     es.onmessage = (e) => { try { receive(JSON.parse(e.data), true); } catch {} };
     es.onerror = () => {
-      setLink(false);
+      setLink(boxOk);
       if (es.readyState === 2) { setTimeout(connect, retry * 1000); retry = Math.min(retry * 2, 60); }
     };
+  }
+  /* ---------------- 頭脳サーバー(スタック本体の会話)から受け取る ---------------- */
+  let boxFirst = true, boxOk = false, boxTimer = null;
+  async function pollBox() {
+    clearTimeout(boxTimer);
+    if (document.hidden) return;
+    try {
+      const r = await fetch(`${BRAIN_BOX}${TOPIC}.json?t=${Date.now()}`, { cache: "no-store" });
+      if (r.ok) {
+        const items = ((await r.json()).items || []).filter((x) => x && x.id);
+        let latest = null;
+        for (const x of items) {
+          const m = { id: "b" + x.id, time: (x.time || Date.now() / 1000) * 1000, title: x.title || "", text: x.text || "", data: x.data || null };
+          if (addLog(m) && (!latest || m.time > latest.time)) latest = m;
+        }
+        if (latest && (!boxFirst || Date.now() - latest.time < 10 * 60000)) show(latest);
+        boxFirst = false;
+      }
+      boxOk = r.ok || r.status === 404;
+    } catch { boxOk = false; }
+    if (!es || es.readyState !== 1) setLink(boxOk);
+    boxTimer = setTimeout(pollBox, 3000);
   }
   async function publish(obj) {
     const r = await fetch(`${RELAY}${TOPIC}`, { method: "POST", body: JSON.stringify(obj) });
@@ -528,7 +551,12 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     if (started) return; started = true;
     setLink(false);
     catchUp().then(connect);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden && (!es || es.readyState === 2)) { catchUp(); connect(); } });
+    pollBox();
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) return;
+      pollBox();
+      if (!es || es.readyState === 2) { catchUp(); connect(); }
+    });
   }
   TOPIC = store.get("stackTopic");
   if (store.get("stackPass") === PASS_CODE && TOPIC) openApp(); else showLogin();
