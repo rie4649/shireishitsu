@@ -232,6 +232,7 @@
 
 <div class="sheet" id="logSheet" hidden><div class="in">
   <div class="hd"><span>TRANSMISSION LOG</span><button class="ghost" data-close type="button" aria-label="閉じる">×</button></div>
+  <div style="font-size:12px;color:var(--dim);margin:4px 0 6px">履歴を押すと、その1件が消えるよ</div>
   <div id="logList"></div>
   <button class="btn" id="logClear" type="button" style="margin-top:12px;width:100%">ログを消去</button>
 </div></div>
@@ -283,7 +284,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "3.3";
+const PAGE_VER = "3.4";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -425,7 +426,9 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
 
   /* ---------------- LOG ---------------- */
   function getLog() { try { return JSON.parse(store.get("stackLog") || "[]"); } catch { return []; } }
+  function getGone() { try { return JSON.parse(store.get("logGone") || "[]"); } catch { return []; } }
   function addLog(m) {
+    if (getGone().includes(m.id)) return false;
     if (m.time && m.time < +(store.get("logClearedAt") || 0)) return false;
     const log = getLog();
     if (log.some((x) => x.id === m.id)) return false;
@@ -437,7 +440,12 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
       <div class="log-item" data-i="${i}"><div class="w">${esc(timeLabel(m.time))}${m.title ? " ▸ " + esc(m.title) : ""}</div>
       <div class="s">${esc((m.text || "").slice(0, 80))}${(m.text || "").length > 80 ? "…" : ""}</div></div>`).join("")
       : `<div class="empty">まだ通信はないよ。スタックに質問すると、ここにたまるの。</div>`;
-    $("logList").querySelectorAll(".log-item").forEach((el) => el.onclick = () => { closeSheets(); show(getLog()[+el.dataset.i]); });
+    // 履歴は押すとその1件が消える(頭脳サーバーから読み直されても戻らないよう、消した印を覚える)
+    $("logList").querySelectorAll(".log-item").forEach((el) => el.onclick = () => {
+      const log = getLog(), m = log[+el.dataset.i]; if (!m) return;
+      const gone = getGone(); gone.push(m.id); store.set("logGone", JSON.stringify(gone.slice(-300)));
+      log.splice(+el.dataset.i, 1); store.set("stackLog", JSON.stringify(log)); renderLog();
+    });
   }
   function closeSheets() { document.querySelectorAll(".sheet").forEach((x) => x.hidden = true); }
   document.querySelectorAll("[data-close]").forEach((b) => b.onclick = closeSheets);
