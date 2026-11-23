@@ -389,7 +389,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "5.2";
+const PAGE_VER = "5.3";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -809,7 +809,9 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   let askStT = 0;
   const askSt = (s) => { $("heard").textContent = s; clearTimeout(askStT); if (s) askStT = setTimeout(() => { if ($("heard").textContent === s) $("heard").textContent = ""; }, 15000); };
   async function askOnce(text) {
-    const r = await fetch(ASK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: TOPIC, text }) });
+    let r;
+    try { r = await fetch(ASK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: TOPIC, text }) }); }
+    catch { return { ok: false, reason: "http599" }; }
     return r.json().catch(() => ({ ok: false, reason: "http" + r.status }));
   }
   async function talk(raw) {
@@ -820,16 +822,23 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     convoAdd("あなた(司令室)", text);
     maybeResearch(text);
     try {
-      askSt("▸ スタックに送信中");
+      askSt("▸ スタックに送信中…(考えるのに少しかかるよ)");
       let j = await askOnce(text);
       if (!j.ok && j.reason === "sleep") {
         askSt("▸ スタックを起こしてるよ(スマホから声をかけるね)");
         if ("speechSynthesis" in window) await utter(wakeWord());
         for (let i = 0; i < 8 && !j.ok; i++) { await wait(1500); j = await askOnce(text); if (j.ok || j.reason !== "sleep") break; }
       }
-      if (j.ok) { askSt("▸ 送ったよ。スタックが答えるね"); $("talkIn").value = ""; }
+      /* サーバーが起き直している時は、自動で待って送り直す(最大約1分) */
+      for (let i = 0; i < 6 && !j.ok && /^(starting|http5\d\d|ClientConnectorError|ServerDisconnectedError|TimeoutError)$/.test(j.reason || ""); i++) {
+        askSt("▸ スタックの頭脳が準備中なの。少し待ってね…");
+        await wait(10000);
+        j = await askOnce(text);
+      }
+      if (j.ok) { askSt(j.mode === "text" ? "▸ スタックが答えたよ" : "▸ 送ったよ。スタックが答えるね"); $("talkIn").value = ""; }
       else if (j.reason === "sleep") askSt("▸ スタックが起きなかったよ。本体に「スタック」と話しかけて起こしてね");
-      else askSt("▸ 送れなかったよ(" + (j.reason || "?") + ")。もう一回ためしてね");
+      else if (j.reason === "key") askSt("▸ 通信キーが合わないみたい。SETで確かめてね");
+      else askSt("▸ うまく送れなかったよ。少したってから、もう一回ためしてね");
     } catch { askSt("▸ 送れなかったよ。電波を確認してね"); }
     finally {
       talking = false; $("talkGo").disabled = false;
