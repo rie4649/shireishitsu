@@ -389,7 +389,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "5.4";
+const PAGE_VER = "5.5";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -1396,6 +1396,71 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   }
   addEventListener("resize", resize);
   resize(); requestAnimationFrame(frame);
+})();
+</script>
+
+<!-- VER 5.5: 開いた時の起動演出(約2秒・タップで飛ばせる) -->
+<div id="bootFx" style="position:fixed;inset:0;z-index:99999;background:#02060f;transition:opacity .45s ease;cursor:pointer">
+  <canvas id="bootCv" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+  <div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-family:ui-monospace,Menlo,Consolas,monospace;color:#bfe9ff;pointer-events:none;text-shadow:0 0 12px #3cc8ff,0 0 28px #1a7dff">
+    <div id="bootT1" style="font-size:12px;letter-spacing:.5em;opacity:.8">ACCESS GRANTED</div>
+    <div style="font-size:clamp(22px,7vw,40px);font-weight:700;letter-spacing:.18em;margin:10px 0">STACK COMMAND</div>
+    <div id="bootPct" style="font-size:13px;letter-spacing:.3em">SYSTEM BOOT 000%</div>
+  </div>
+</div>
+<script>
+(function(){
+  const fx=document.getElementById("bootFx"), cv=document.getElementById("bootCv");
+  if(!fx||!cv) return;
+  const ctx=cv.getContext("2d"), DUR=2100, t0=performance.now();
+  let W,H,dpr, done=false;
+  function size(){dpr=Math.min(2,window.devicePixelRatio||1);W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}
+  size(); addEventListener("resize",size);
+  const cols=Array.from({length:40},()=>({x:Math.random(),sp:.3+Math.random()*1.2,o:Math.random()*1000}));
+  const bars=Array.from({length:18},()=>.2+Math.random()*.8);
+  const hex=()=>Math.floor(Math.random()*0xffff).toString(16).toUpperCase().padStart(4,"0");
+  const words=["DECRYPT","SYNC","LINK","AUTH","SCAN","NODE","CORE","GRID"];
+  function end(){ if(done) return; done=true; fx.style.opacity="0"; setTimeout(()=>fx.remove(),480); }
+  fx.addEventListener("click",end);
+  function frame(now){
+    if(done) return;
+    const t=(now-t0)/DUR, p=Math.min(1,t), cx=W/2, cy=H/2, R=Math.min(W,H);
+    ctx.fillStyle="rgba(2,6,15,.35)"; ctx.fillRect(0,0,W,H);
+    // 流れる数字
+    ctx.font="11px ui-monospace,Menlo,monospace";
+    cols.forEach(c=>{const y=((now*c.sp*.15+c.o)%(H+200))-100; ctx.fillStyle="rgba(80,200,255,"+(.25+.5*Math.random())+")";
+      for(let k=0;k<6;k++) ctx.fillText(hex(), c.x*W, y-k*14);});
+    // 回る輪
+    ctx.lineWidth=1.5;
+    for(let i=0;i<4;i++){const r=R*(.16+i*.075)*(0.6+0.4*p), a=now/((i%2?-1:1)*(500+i*180));
+      ctx.strokeStyle="rgba("+(i%2?"120,220,255":"60,150,255")+","+(.75-i*.12)+")"; ctx.shadowColor="#3cc8ff"; ctx.shadowBlur=14;
+      ctx.beginPath(); ctx.arc(cx,cy,r,a,a+Math.PI*(0.6+i*.25)); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx,cy,r,a+Math.PI,a+Math.PI*(1.3+i*.15)); ctx.stroke();}
+    ctx.shadowBlur=0;
+    // 棒グラフ(左下)
+    const bw=Math.max(4,W*.012), bx=16, by=H-24;
+    bars.forEach((b,i)=>{const h=(H*.22)*b*Math.min(1,p*1.6)*(0.7+0.3*Math.sin(now/120+i));
+      ctx.fillStyle="rgba(60,200,255,"+(.35+.4*b)+")"; ctx.fillRect(bx+i*(bw+3),by-h,bw,h);});
+    // 波形グラフ(右上)
+    ctx.strokeStyle="rgba(140,235,255,.85)"; ctx.lineWidth=1.2; ctx.beginPath();
+    const gx=W*.55, gw=W*.42, gy=H*.14;
+    for(let i=0;i<=80;i++){const x=gx+gw*i/80, y=gy+Math.sin(i*.35+now/90)*18*Math.sin(i*.07+now/400)+(Math.random()-.5)*6;
+      i?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.stroke();
+    // 文字ログ(右下)
+    ctx.fillStyle="rgba(170,230,255,.8)"; ctx.textAlign="right";
+    for(let k=0;k<5;k++) ctx.fillText(words[(Math.floor(now/90)+k)%words.length]+" 0x"+hex()+" ... OK", W-16, H-24-k*15);
+    ctx.textAlign="left";
+    // 横に走る光
+    const sy=(p*1.3%1)*H; const g=ctx.createLinearGradient(0,sy-30,0,sy+30);
+    g.addColorStop(0,"rgba(60,200,255,0)"); g.addColorStop(.5,"rgba(160,235,255,.35)"); g.addColorStop(1,"rgba(60,200,255,0)");
+    ctx.fillStyle=g; ctx.fillRect(0,sy-30,W,60);
+    // 最後に白く光る
+    if(p>.86){ctx.fillStyle="rgba(200,240,255,"+((p-.86)/.14*.55)+")"; ctx.fillRect(0,0,W,H);}
+    document.getElementById("bootPct").textContent="SYSTEM BOOT "+String(Math.floor(p*100)).padStart(3,"0")+"%";
+    if(t>=1) return end();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 })();
 </script>
 </body>
