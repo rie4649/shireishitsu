@@ -109,6 +109,13 @@
   button:active { background: rgba(61,139,255,.35); }
   button, input, label { touch-action: manipulation; }
   button:disabled { opacity: .45; }
+  button.micbig { display: flex; align-items: center; justify-content: center; gap: 10px; width: min(62vw, 330px); min-height: 58px; margin: 6px 0 8px;
+    font-family: var(--jp); font-size: 19px; font-weight: 700; letter-spacing: .06em; color: #fff; cursor: pointer;
+    background: rgba(61,139,255,.22); border: 2px solid var(--glow); border-radius: 12px; box-shadow: 0 0 14px rgba(61,139,255,.35); }
+  button.micbig .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--dim); flex: none; }
+  button.micbig.on { background: rgba(255,70,90,.30); border-color: #ff5a6e; box-shadow: 0 0 20px rgba(255,90,110,.65); }
+  button.micbig.on .dot { background: #ff5a6e; box-shadow: 0 0 10px #ff5a6e; animation: micblink 1.2s infinite; }
+  @keyframes micblink { 50% { opacity: .3; } }
   button.chip.on { background: rgba(61,139,255,.45); color: #fff; border-color: var(--glow); box-shadow: 0 0 12px rgba(61,139,255,.6); }
   .heard { color: var(--glow2); font-size: 12px; min-height: 1.2em; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60vw; }
   button.ghost { background: none; border: 0; color: var(--dim); font-size: 18px; cursor: pointer; }
@@ -209,11 +216,11 @@
     <div class="status">
       <div class="st" id="st">STANDBY ▸ 通信待機中</div>
       <div class="heard" id="heard"></div>
+      <button class="micbig" id="micBtn" type="button" aria-pressed="false"><span class="dot" aria-hidden="true"></span><span id="micLabel">🎤 MIC を入れる</span></button>
       <div class="btns">
         <button class="chip" id="infoBtn" type="button">INFO</button>
         <button class="chip" id="logBtn" type="button">LOG</button>
         <button class="chip" id="setBtn" type="button">SET</button>
-        <button class="chip" id="micBtn" type="button" aria-pressed="false">MIC</button>
       </div>
     </div>
     <button class="stack" id="stackBtn" type="button" aria-label="スタック（押すと最後の答えをもう一度）">
@@ -226,6 +233,7 @@
 <div class="sheet" id="logSheet" hidden><div class="in">
   <div class="hd"><span>TRANSMISSION LOG</span><button class="ghost" data-close type="button" aria-label="閉じる">×</button></div>
   <div id="logList"></div>
+  <button class="btn" id="logClear" type="button" style="margin-top:12px;width:100%">ログを消去</button>
 </div></div>
 
 <div class="sheet" id="infoSheet" hidden><div class="in set">
@@ -275,7 +283,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "3.0";
+const PAGE_VER = "3.2";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -418,6 +426,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   /* ---------------- LOG ---------------- */
   function getLog() { try { return JSON.parse(store.get("stackLog") || "[]"); } catch { return []; } }
   function addLog(m) {
+    if (m.time && m.time < +(store.get("logClearedAt") || 0)) return false;
     const log = getLog();
     if (log.some((x) => x.id === m.id)) return false;
     log.unshift(m); store.set("stackLog", JSON.stringify(log.slice(0, 30))); return true;
@@ -433,7 +442,15 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   function closeSheets() { document.querySelectorAll(".sheet").forEach((x) => x.hidden = true); }
   document.querySelectorAll("[data-close]").forEach((b) => b.onclick = closeSheets);
   document.querySelectorAll(".sheet").forEach((s) => s.addEventListener("click", (e) => { if (e.target === s) closeSheets(); }));
-  $("logBtn").onclick = () => { closeKeyboard(); renderLog(); $("logSheet").hidden = false; };
+  $("logBtn").onclick = () => { closeKeyboard(); renderLog(); $("logClear").textContent = "ログを消去"; $("logSheet").hidden = false; };
+  let clearArm = 0;
+  $("logClear").onclick = () => {
+    if (Date.now() > clearArm) { clearArm = Date.now() + 4000; $("logClear").textContent = "もう一回押すと全部消すよ"; return; }
+    clearArm = 0;
+    // 消したものが頭脳サーバーから読み直されて戻らないよう、消した時刻より前の受信は表示しない
+    store.set("stackLog", "[]"); store.set("logClearedAt", String(Date.now()));
+    renderLog(); $("logClear").textContent = "消去したよ";
+  };
   $("setBtn").onclick = () => { closeKeyboard(); $("setNote").textContent = ""; $("setSheet").hidden = false; };
   $("copyKey").onclick = async () => {
     try { await navigator.clipboard.writeText(TOPIC); $("setNote").textContent = "コピーしたよ！"; }
@@ -484,12 +501,18 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
       const r = await fetch(`${BRAIN_BOX}${TOPIC}.json?t=${Date.now()}`, { cache: "no-store" });
       if (r.ok) {
         const items = ((await r.json()).items || []).filter((x) => x && x.id);
-        let latest = null;
+        let latest = null; const fresh = [];
         for (const x of items) {
           const m = { id: "b" + x.id, time: (x.time || Date.now() / 1000) * 1000, title: x.title || "", text: x.text || "", data: x.data || null };
-          if (addLog(m) && (!latest || m.time > latest.time)) latest = m;
+          if (addLog(m)) { fresh.push(m); if (!latest || m.time > latest.time) latest = m; }
         }
-        if (latest && (!boxFirst || Date.now() - latest.time < 10 * 60000)) show(latest);
+        // MICで会話を表示している時は、スタック本体の本当の返事を会話の中に入れる(会話カードで上書きして消さない)
+        if (!boxFirst && micOn && fresh.length) {
+          fresh.sort((a, b) => a.time - b.time).forEach((m) => {
+            const body = m.title && m.title !== "スタック" ? `【${m.title}】${m.text}` : m.text;
+            convoAdd("スタック", body);
+          });
+        } else if (latest && (!boxFirst || Date.now() - latest.time < 10 * 60000)) show(latest);
         boxFirst = false;
       }
       boxOk = r.ok || r.status === 404;
@@ -762,21 +785,22 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     if (WAKE_HEAD.test(t)) {
       const rest = t.replace(/^.*?(スタック|すたっく|ｽﾀｯｸ|stack)[、。,!！\s]*/i, "").trim();
       if (rest) { convoAdd("あなた", rest); maybeResearch(rest); } else {
-        convo.waitUser = now + 12000; convoAdd("あなた", "スタック");
+        convo.waitUser = now + 30000; convoAdd("あなた", "スタック");
         clearTimeout(convo.missT);
-        convo.missT = setTimeout(() => { if (convo.waitUser) { convo.waitUser = 0; convoAdd("司令室", "そのあとの言葉が聞き取れなかったよ。もう一回、ゆっくり言ってね。"); } }, 12500);
+        convo.missT = setTimeout(() => { convo.waitUser = 0; }, 30000);
       }
       return;
     }
     if (now < convo.waitUser) { convo.waitUser = 0; clearTimeout(convo.missT); convoAdd("あなた", t); maybeResearch(t); return; }
-    if (now < convo.waitReply) { convo.waitReply = now + 15000; convoAdd("スタック", t); return; }
+    // スタックの返事は頭脳サーバーから本物が届くので、スマホのマイクで拾った声をスタックの言葉としては出さない
     // 呼びかけ前のまわりの声は出さない
   }
   function setMicUi(msg) {
     $("micBtn").classList.toggle("on", micOn); $("micBtn").setAttribute("aria-pressed", micOn ? "true" : "false");
+    $("micLabel").textContent = micOn ? "🎤 聞き取り中(押すと止める)" : "🎤 MIC を入れる";
     if (msg != null) $("heard").textContent = msg;
   }
-  let fastFails = 0, micIdleT = null;
+  let fastFails = 0, micIdleT = null, micCapFails = 0;
   function micIdle() { clearTimeout(micIdleT); micIdleT = setTimeout(() => { if (micOn) { micOn = false; micStop(); setMicUi("10分なにも聞こえなかったから、MICを止めたよ"); } }, 600000); }
   function micStart() {
     if (!micOn || micPaused || rec) return;
@@ -797,7 +821,11 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     r.onerror = (e) => {
       if (rec !== r) return;
       if (e.error === "no-speech") $("heard").textContent = "🎤 聞いてるよ(まだ何も聞こえないの)";
-      if (e.error === "audio-capture") { micOn = false; setMicUi("マイクが見つからないみたい。ほかのアプリがマイクを使ってないか見てね"); return; }
+      if (e.error === "audio-capture") {
+        // iPhoneは読み上げの直後などに一時的にマイクが取れないことがあるので、少し待って2回までやり直す
+        micCapFails = (micCapFails || 0) + 1;
+        if (micCapFails <= 2) { $("heard").textContent = "🎤 マイクの準備中…"; return; }
+        micCapFails = 0; micOn = false; setMicUi("マイクが使えなかったよ。もう一回 MIC を押してね"); return; }
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         micOn = false; setMicUi("マイクが使えないみたい。設定でマイクを許可するか、Safariで開いてね");
       }
