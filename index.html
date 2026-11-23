@@ -146,6 +146,10 @@
   .rx.secret { border-color: rgba(255,70,90,.6) !important; box-shadow: 0 0 28px rgba(255,40,70,.25) !important; }
   .rx.secret .hd span:first-child { color: #ff6b7d; }
   .rx.secret h2::before { content: "CLASSIFIED ▸ "; font-family: var(--mono); font-size: .62em; letter-spacing: .16em; color: #ff6b7d; vertical-align: middle; }
+  /* VER 6.1: 新しい極秘ファイルが届いたら FILE が赤く光る */
+  button.chip.newf { color: #fff; border-color: #ff6b7d; background: rgba(120,10,30,.55); animation: newf 1.6s ease-in-out infinite; position: relative; }
+  button.chip.newf::after { content: "NEW"; position: absolute; top: -8px; right: -6px; font-size: 8px; letter-spacing: .08em; background: #ff3355; color: #fff; border-radius: 6px; padding: 1px 4px; }
+  @keyframes newf { 50% { box-shadow: 0 0 14px rgba(255,60,90,.85); } }
   .sx .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
   .sx .card { border-top: 1px solid var(--line); padding: 10px 0; }
   .sx .card .w { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--dim); }
@@ -426,7 +430,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "6.0";
+const PAGE_VER = "6.1";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -881,7 +885,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   $("secTabs").querySelectorAll("[data-t]").forEach((b) => b.onclick = () => {
     secTab = b.dataset.t; $("secTabs").querySelectorAll("[data-t]").forEach((x) => x.classList.toggle("on", x === b)); secRender();
   });
-  async function openSecret() { closeKeyboard(); $("secSheet").hidden = false; $("secBody").innerHTML = `<div class="card"><div class="w">ACCESSING…</div></div>`; await loadStory(); secRender(); }
+  async function openSecret() { closeKeyboard(); secSeen(); $("secSheet").hidden = false; $("secBody").innerHTML = `<div class="card"><div class="w">ACCESSING…</div></div>`; await loadStory(); secRender(); }
   $("secBtn").onclick = openSecret;
   // 隠し: スタックのキャラを長押し(0.8秒)すると極秘アーカイブが開く
   (() => {
@@ -891,14 +895,20 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     b.addEventListener("click", (e) => { if (fired) { e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true);
   })();
   // 真ん中の小さな文字に、ときどき「今日の傍受通信」を流す(謎の通信)
+  function secNew() { return STORY && store.get("secSeenDay") !== String(storyDay()); }
+  function secSeen() { if (STORY) store.set("secSeenDay", String(storyDay())); $("secBtn").classList.remove("newf"); }
   loadStory().then((S) => {
     if (!S) return;
     const el = $("coreSub"), base = el.textContent;
+    const mark = () => $("secBtn").classList.toggle("newf", secNew());
+    mark(); setInterval(mark, 60000);
     let k = 0;
     setInterval(() => {
       k++;
       const d = storyDay(), c = S.ciphers[(d - 1) % S.ciphers.length].c;
-      el.textContent = k % 3 === 2 ? `INTERCEPT #${String(d).padStart(3, "0")} ▸ ${c}` : base;
+      const fNo = Math.min(d, S.files.length);
+      el.textContent = k % 3 === 2 ? `INTERCEPT #${String(d).padStart(3, "0")} ▸ ${c}`
+        : (k % 3 === 1 && secNew()) ? `NEW FILE ▸ No.${fNo} 着信 ▸ FILE を押してね` : base;
     }, 6000);
   });
   /* ---------------- 話しかけ(スマホが小さく読み上げ → スタックが聞き取る) ---------------- */
