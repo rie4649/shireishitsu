@@ -85,6 +85,17 @@
   .rx dd.num { font-family: var(--mono); font-size: 16px; color: #e6f1ff; }
   .rx .x { position: absolute; top: 6px; right: 8px; }
   .rx .hd { padding-right: 22px; }
+  .rx .viz { margin-top: 12px; }
+  .rx .viz .map { height: min(42vh, 340px); border: 1px solid var(--line); border-radius: 4px; background: #061027; }
+  .rx .viz .map .leaflet-tile-pane { filter: invert(1) hue-rotate(195deg) brightness(.9) contrast(.9) saturate(.6); }
+  .rx .viz .maplink { display: inline-block; margin-top: 6px; font-size: 12px; color: var(--glow2); }
+  .rx .viz .tbl { overflow-x: auto; max-height: 46vh; border: 1px solid var(--line); border-radius: 4px; }
+  .rx .viz table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  .rx .viz th { position: sticky; top: 0; background: #0a1c44; color: var(--glow2); font-family: var(--mono); font-weight: 400; letter-spacing: .06em; text-align: left; padding: 6px 8px; white-space: nowrap; }
+  .rx .viz td { padding: 6px 8px; border-top: 1px solid rgba(120,175,255,.14); vertical-align: top; }
+  .rx .viz tr:nth-child(even) td { background: rgba(61,139,255,.06); }
+  .rx .viz .msg { font-size: 12px; color: var(--warn); }
+  .rx.wide { width: min(820px, 100%); }
   .rx .bar { height: 2px; background: var(--glow); margin-top: 12px; transform-origin: left; }
   @keyframes blink { 50% { opacity: .2; } }
 
@@ -269,6 +280,7 @@
       <h2 id="rxTitle"></h2>
       <div class="say" id="rxSay"></div>
       <dl id="rxData"></dl>
+      <div class="viz" id="rxViz" hidden></div>
       <div class="bar" id="rxBar"></div>
     </section>
   </main>
@@ -360,7 +372,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "5.0";
+const PAGE_VER = "5.1";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -483,6 +495,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     $("rxTitle").textContent = msg.title || "スタックからの通信";
     $("rxTitle").hidden = !msg.title;
     const dl = $("rxData"); dl.innerHTML = dataRows(msg.data); dl.hidden = !dl.innerHTML;
+    renderViz(msg);
     const say = $("rxSay"); say.classList.remove("done"); say.textContent = "";
     rx.classList.add("show");
     window.__bgPulse && window.__bgPulse();
@@ -499,6 +512,55 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     bar.style.transition = "none"; bar.style.transform = "scaleX(1)";
     requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.transition = `transform ${SHOW_SEC}s linear`; bar.style.transform = "scaleX(0)"; }));
     hideTimer = setTimeout(hide, SHOW_SEC * 1000);
+  }
+  /* ---------------- 図(地図・表) ---------------- */
+  let leafletP = null, mapObj = null;
+  function loadLeaflet() {
+    if (window.L) return Promise.resolve();
+    if (!leafletP) leafletP = new Promise((res, rej) => {
+      const css = document.createElement("link"); css.rel = "stylesheet";
+      css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; document.head.appendChild(css);
+      const js = document.createElement("script"); js.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+      js.onload = res; js.onerror = rej; document.head.appendChild(js);
+    });
+    return leafletP;
+  }
+  const geoCache = {};
+  async function geocode(q) {
+    if (q in geoCache) return geoCache[q];
+    const tries = [q, q.replace(/[0-9０-９\-ー－丁目番地号]+$/u, "").trim()].filter((x, i, a) => x && a.indexOf(x) === i);
+    for (const t of tries) {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&accept-language=ja&q=${encodeURIComponent(t)}`);
+      const j = r.ok ? await r.json() : [];
+      if (j[0]) return (geoCache[q] = { lat: +j[0].lat, lon: +j[0].lon, label: j[0].display_name });
+    }
+    return (geoCache[q] = null);
+  }
+  async function renderViz(msg) {
+    const box = $("rxViz");
+    if (mapObj) { mapObj.remove(); mapObj = null; }
+    box.innerHTML = ""; box.hidden = true; rx.classList.remove("wide");
+    if (msg.table && Array.isArray(msg.table.cols)) {
+      const th = msg.table.cols.map((c) => `<th>${esc(c)}</th>`).join("");
+      const tb = (msg.table.rows || []).map((r) => `<tr>${(r || []).map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("");
+      box.innerHTML = `<div class="tbl"><table><thead><tr>${th}</tr></thead><tbody>${tb}</tbody></table></div>`;
+      box.hidden = false; rx.classList.add("wide"); return;
+    }
+    if (msg.map && msg.map.q) {
+      const q = msg.map.q, gm = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+      box.innerHTML = `<div class="map" id="rxMap"></div><a class="maplink" href="${gm}" target="_blank" rel="noopener">Googleマップで開く ↗</a>`;
+      box.hidden = false; rx.classList.add("wide");
+      try {
+        const [pt] = await Promise.all([geocode(q), loadLeaflet()]);
+        if (current !== msg) return;
+        if (!pt) { $("rxMap").outerHTML = `<div class="msg">地図で場所を見つけられなかったの。下のリンクで開いてね。</div>`; return; }
+        mapObj = L.map("rxMap", { zoomControl: true, attributionControl: true }).setView([pt.lat, pt.lon], 15);
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(mapObj);
+        L.circleMarker([pt.lat, pt.lon], { radius: 9, color: "#7fb6ff", weight: 2, fillColor: "#3d8bff", fillOpacity: .6 }).addTo(mapObj)
+          .bindTooltip(msg.map.name || q, { permanent: true, direction: "top", offset: [0, -8] });
+        setTimeout(() => mapObj && mapObj.invalidateSize(), 300);
+      } catch { const m = $("rxMap"); if (m) m.outerHTML = `<div class="msg">地図を読み込めなかったの。下のリンクで開いてね。</div>`; }
+    }
   }
   function hide() { rx.classList.remove("show"); clearInterval(typeTimer); mouthIdle(); setSt("STANDBY", "通信待機中"); }
   $("rxClose").onclick = hide;
@@ -591,12 +653,13 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
         const items = ((await r.json()).items || []).filter((x) => x && x.id);
         let latest = null; const fresh = [];
         for (const x of items) {
-          const m = { id: "b" + x.id, time: (x.time || Date.now() / 1000) * 1000, title: x.title || "", text: x.text || "", data: x.data || null };
+          const m = { id: "b" + x.id, time: (x.time || Date.now() / 1000) * 1000, title: x.title || "", text: x.text || "", data: x.data || null, map: x.map || null, table: x.table || null };
           if (addLog(m)) { fresh.push(m); if (!latest || m.time > latest.time) latest = m; }
         }
         // MICで会話を表示している時は、スタック本体の本当の返事を会話の中に入れる(会話カードで上書きして消さない)
         if (!boxFirst && fresh.length) {
           fresh.sort((a, b) => a.time - b.time).forEach((m) => {
+            if (m.map || m.table) { setTimeout(() => show(m), 1500); return; }   // 図は会話カードにせず、そのまま大きく出す
             if (m.title === "司令室から") return;               // 司令室から聞いた言葉はもう出している
             if (m.title === "本体") { convoAdd("あなた(本体)", m.text); return; }
             const body = m.title && m.title !== "スタック" ? `【${m.title}】${m.text}` : m.text;
