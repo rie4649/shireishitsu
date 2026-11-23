@@ -194,6 +194,12 @@
     .rx .say { font-size: 14px; }
     .stack { width: 74px; }
   }
+
+  /* VER 5.8: 答えを画面の真ん中に。会話の時はパネルを短くして中央に置き、答えを大きく、履歴は下で小さくスクロール */
+  .rx.convo { max-height: 72%; }
+  .rx.convo .say { font-size: 18px; line-height: 1.8; padding: 6px 0 4px; text-shadow: 0 0 10px rgba(120,190,255,.35); }
+  .rx.convo dl { max-height: 15vh; overflow-y: auto; font-size: 12px; opacity: .8; border-top: 1px dashed var(--line); padding-top: 8px; }
+  @media (max-width: 520px) { .rx.convo .say { font-size: 17px; } }
   @media (prefers-reduced-motion: reduce) { .status .st::before, .rx .say::after { animation: none; } }
 
   /* ---------- VER 5.0: 真ん中のスタンバイ表示(近未来の中核) ---------- */
@@ -389,7 +395,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "5.7";
+const PAGE_VER = "5.8";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -508,6 +514,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   function show(msg, opts = {}) {
     current = msg;
     clearInterval(typeTimer); clearTimeout(hideTimer);
+    rx.classList.toggle("convo", msg.id === "convo");
     $("rxWhen").textContent = timeLabel(msg.time);
     $("rxTitle").textContent = msg.title || "スタックからの通信";
     $("rxTitle").hidden = !msg.title;
