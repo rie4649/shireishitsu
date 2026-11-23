@@ -218,7 +218,7 @@
       <div class="heard" id="heard"></div>
       <button class="micbig" id="micBtn" type="button" aria-pressed="false"><span class="dot" aria-hidden="true"></span><span id="micLabel">🎤 MIC を入れる</span></button>
       <div class="btns">
-        <button class="chip" id="infoBtn" type="button">INFO</button>
+        <button class="chip" id="infoBtn" type="button" hidden>INFO</button>
         <button class="chip" id="logBtn" type="button">LOG</button>
         <button class="chip" id="setBtn" type="button">SET</button>
       </div>
@@ -284,7 +284,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "3.4";
+const PAGE_VER = "3.5";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
