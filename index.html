@@ -389,7 +389,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "5.3";
+const PAGE_VER = "5.4";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -681,6 +681,10 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
             if (m.title === "本体") { convoAdd("あなた(本体)", m.text); return; }
             const body = m.title && m.title !== "スタック" ? `【${m.title}】${m.text}` : m.text;
             convoAdd("スタック", body);
+            // スタック本体が寝ていて文字で答えた時は、スマホが声で読み上げる
+            if (askWait && m.title === "スタック" && m.time > askWait.t) {
+              if (askWait.mode === "text") { speakAloud(m.text); askWait = null; } else askWait.text = m.text;
+            }
           });
         } else if (latest && (!boxFirst || Date.now() - latest.time < 10 * 60000)) show(latest);
         boxFirst = false;
@@ -806,6 +810,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
      本体が寝ている時は、スマホから「スタック」と声をかけて起こしてから送り直す。 */
   const ASK_URL = "https://stack-brain-660948285864.asia-northeast1.run.app/ask";
   let talking = false;
+  let askWait = null;   // 司令室から聞いた答えを待っている間の印(スマホで読み上げるため)
   let askStT = 0;
   const askSt = (s) => { $("heard").textContent = s; clearTimeout(askStT); if (s) askStT = setTimeout(() => { if ($("heard").textContent === s) $("heard").textContent = ""; }, 15000); };
   async function askOnce(text) {
@@ -818,6 +823,9 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     const text = (raw || "").trim();
     if (!text || talking) return;
     talking = true; $("talkGo").disabled = true;
+    // iPhone はボタンを押した瞬間でないと声を出せないので、ここで声の準備をしておく
+    try { if ("speechSynthesis" in window) { const p = new SpeechSynthesisUtterance(" "); p.volume = 0; speechSynthesis.speak(p); } } catch {}
+    askWait = { t: Date.now() - 2000, mode: null, text: null };
     closeKeyboard();
     convoAdd("あなた(司令室)", text);
     maybeResearch(text);
@@ -835,10 +843,15 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
         await wait(10000);
         j = await askOnce(text);
       }
-      if (j.ok) { askSt(j.mode === "text" ? "▸ スタックが答えたよ" : "▸ 送ったよ。スタックが答えるね"); $("talkIn").value = ""; }
+      if (j.ok) {
+        askSt(j.mode === "text" ? "▸ スタックが答えたよ" : "▸ 送ったよ。スタックが答えるね"); $("talkIn").value = "";
+        if (j.mode === "text" && askWait) { if (askWait.text) { speakAloud(askWait.text); askWait = null; } else askWait.mode = "text"; }
+        else askWait = null;   // 本体が起きている時は本体がしゃべる
+      }
       else if (j.reason === "sleep") askSt("▸ スタックが起きなかったよ。本体に「スタック」と話しかけて起こしてね");
       else if (j.reason === "key") askSt("▸ 通信キーが合わないみたい。SETで確かめてね");
       else askSt("▸ うまく送れなかったよ。少したってから、もう一回ためしてね");
+      if (!j.ok) askWait = null;
     } catch { askSt("▸ 送れなかったよ。電波を確認してね"); }
     finally {
       talking = false; $("talkGo").disabled = false;
