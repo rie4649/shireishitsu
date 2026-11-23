@@ -142,6 +142,22 @@
   /* ---------- 引き出し(LOG / 設定) ---------- */
   .sheet { position: fixed; inset: 0; z-index: 8; background: rgba(1,3,9,.7); display: flex; align-items: flex-end; justify-content: center; }
   .sheet[hidden] { display: none; }
+  /* VER 6.0: 極秘ファイル(物語)。赤い CLASSIFIED の見た目 */
+  .rx.secret { border-color: rgba(255,70,90,.6) !important; box-shadow: 0 0 28px rgba(255,40,70,.25) !important; }
+  .rx.secret .hd span:first-child { color: #ff6b7d; }
+  .rx.secret h2::before { content: "CLASSIFIED ▸ "; font-family: var(--mono); font-size: .62em; letter-spacing: .16em; color: #ff6b7d; vertical-align: middle; }
+  .sx .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .sx .card { border-top: 1px solid var(--line); padding: 10px 0; }
+  .sx .card .w { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--dim); }
+  .sx .card .t { font-size: 15px; margin: 3px 0; color: var(--ice); }
+  .sx .card .b { font-size: 14px; line-height: 1.8; color: var(--ice); }
+  .sx .card.lock .t, .sx .card.lock .b { color: #ff6b7d; font-family: var(--mono); letter-spacing: .06em; }
+  .sx .redact { display: inline-block; background: #ff6b7d33; color: transparent; border-radius: 2px; user-select: none; }
+  .sx .say { margin-top: 6px; font-size: 12px; padding: 4px 10px; }
+  .sx .rep { border: 1px solid rgba(255,70,90,.45); border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; background: rgba(40,4,12,.35); }
+  .sx .rep dt { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; color: #ff8b99; margin-top: 6px; }
+  .sx .rep dd { font-size: 14px; line-height: 1.7; }
+  .sx input { flex: 1; min-width: 0; font-size: 16px; color: var(--ice); background: rgba(2,8,22,.85); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; outline: none; font-family: var(--jp); }
   .sheet .in {
     width: min(560px, 100%); max-height: 80vh; overflow-y: auto;
     background: #050d22; border: 1px solid var(--line); border-bottom: 0; border-radius: 10px 10px 0 0;
@@ -332,6 +348,7 @@
       </div>
       <div class="btns">
         <button class="chip" id="infoBtn" type="button" hidden>INFO</button>
+        <button class="chip" id="secBtn" type="button" title="極秘ファイル・任務報告">FILE</button>
         <button class="chip" id="logBtn" type="button">LOG</button>
         <button class="chip" id="setBtn" type="button">SET</button>
       </div>
@@ -349,6 +366,17 @@
   <div style="font-size:12px;color:var(--dim);margin:4px 0 6px">履歴を押すと、その1件が消えるよ</div>
   <div id="logList"></div>
   <button class="btn" id="logClear" type="button" style="margin-top:12px;width:100%">ログを消去</button>
+</div></div>
+
+<div class="sheet" id="secSheet" hidden><div class="in sx">
+  <div class="hd"><span style="color:#ff6b7d">TOP SECRET ▸ STACK ARCHIVE</span><button class="ghost" data-close type="button" aria-label="閉じる">×</button></div>
+  <div class="tabs" id="secTabs">
+    <button class="chip on" data-t="rep" type="button">任務報告</button>
+    <button class="chip" data-t="file" type="button">極秘ファイル</button>
+    <button class="chip" data-t="ciph" type="button">暗号</button>
+    <button class="chip" data-t="gai" type="button">外伝</button>
+  </div>
+  <div id="secBody"></div>
 </div></div>
 
 <div class="sheet" id="infoSheet" hidden><div class="in set">
@@ -398,7 +426,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "5.9";
+const PAGE_VER = "6.0";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -534,6 +562,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     current = msg;
     clearInterval(typeTimer); clearTimeout(hideTimer);
     rx.classList.toggle("convo", msg.id === "convo");
+    rx.classList.toggle("secret", !!msg.secret);
     if (/^スタック[：:]/.test(msg.text || "")) { try { stackAnalyzeStop(); } catch {} }
     renderLinks(msg);
     $("rxWhen").textContent = timeLabel(msg.time);
@@ -698,13 +727,13 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
         const items = ((await r.json()).items || []).filter((x) => x && x.id);
         let latest = null; const fresh = [];
         for (const x of items) {
-          const m = { id: "b" + x.id, time: (x.time || Date.now() / 1000) * 1000, title: x.title || "", text: x.text || "", data: x.data || null, map: x.map || null, table: x.table || null };
+          const m = { id: "b" + x.id, time: (x.time || Date.now() / 1000) * 1000, title: x.title || "", text: x.text || "", data: x.data || null, map: x.map || null, table: x.table || null, secret: x.secret || 0 };
           if (addLog(m)) { fresh.push(m); if (!latest || m.time > latest.time) latest = m; }
         }
         // MICで会話を表示している時は、スタック本体の本当の返事を会話の中に入れる(会話カードで上書きして消さない)
         if (!boxFirst && fresh.length) {
           fresh.sort((a, b) => a.time - b.time).forEach((m) => {
-            if (m.map || m.table) { setTimeout(() => show(m), 1500); return; }   // 図は会話カードにせず、そのまま大きく出す
+            if (m.map || m.table || m.secret) { setTimeout(() => show(m), 1500); return; }   // 図は会話カードにせず、そのまま大きく出す
             if (m.title === "司令室から") return;               // 司令室から聞いた言葉はもう出している
             if (m.title === "本体") { convoAdd("あなた(本体)", m.text); return; }
             const body = m.title && m.title !== "スタック" ? `【${m.title}】${m.text}` : m.text;
@@ -785,6 +814,93 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   }
   TOPIC = store.get("stackTopic");
   if (store.get("stackPass") === PASS_CODE && TOPIC) openApp(); else showLogin();
+
+  /* ---------------- VER 6.0: スタックの物語(極秘ファイル・暗号・外伝・任務報告) ----------------
+     中身は story.json(頭脳サーバーの core/utils/stack_story.py と同じ)。平日1日に1つずつ解禁。 */
+  let STORY = null, secTab = "rep";
+  async function loadStory() {
+    if (STORY) return STORY;
+    try { const r = await fetch(`story.json?v=${PAGE_VER}`); if (r.ok) STORY = await r.json(); } catch {}
+    return STORY;
+  }
+  function storyDay(d) {
+    const s = STORY.start.split("-").map(Number), st = Date.UTC(s[0], s[1] - 1, s[2]);
+    const j = jst(d || new Date()), now = Date.UTC(j.getFullYear(), j.getMonth(), j.getDate());
+    let n = 1;
+    for (let t = st + 864e5; t <= now; t += 864e5) { const w = new Date(t).getUTCDay(); if (w > 0 && w < 6) n++; }
+    return n;
+  }
+  const redact = (s) => `<span class="redact">${"■".repeat(Math.max(6, Math.min(26, s.length / 3 | 0)))}</span>`;
+  const sayBtn = (q) => `<button class="chip say" type="button" data-q="${esc(q)}">▶ スタックに話してもらう</button>`;
+  function secRender() {
+    const S = STORY, box = $("secBody");
+    if (!S) { box.innerHTML = `<div class="card"><div class="b">極秘回線につながらなかったの。もう一回開いてね。</div></div>`; return; }
+    const day = storyDay(), F = S.files, C = S.ciphers, L = S.logs, A = S.decodeAfter;
+    const cOf = (i) => C[(i - 1) % C.length], lOf = (i) => L[(i - 1) % L.length];
+    let h = "";
+    if (secTab === "rep") {
+      const fNo = Math.min(day, F.length), j = jst();
+      h += `<dl class="rep"><dt>MISSION No.</dt><dd>${String(day).padStart(4, "0")} ・ ${j.getMonth() + 1}月${j.getDate()}日</dd>
+        <dt>STATUS</dt><dd>全回線、異常なし</dd><dt>司令室ログ</dt><dd>${esc(lOf(day))}</dd>
+        <dt>傍受した暗号</dt><dd>${esc(cOf(day).c)}</dd><dt>解禁ファイル</dt><dd>No.${fNo}「${esc(F[fNo - 1].t)}」</dd></dl>${sayBtn("任務報告して")}`;
+      h += `<div class="card"><div class="w">◤ これまでの司令室ログ</div></div>`;
+      for (let i = day - 1; i >= 1 && i > day - 30; i--) h += `<div class="card"><div class="w">MISSION ${String(i).padStart(4, "0")}</div><div class="b">${esc(lOf(i))}</div></div>`;
+      if (day === 1) h += `<div class="card"><div class="b">任務1日目。ログは毎日1行ずつ、ここにたまっていくのよ。</div></div>`;
+    } else if (secTab === "file") {
+      F.forEach((f, k) => {
+        const n = k + 1, open = n <= day;
+        h += open
+          ? `<div class="card"><div class="w">FILE No.${n}</div><div class="t">${esc(f.t)}</div><div class="b">${esc(f.b)}</div>${sayBtn(`極秘ファイル${n}番を開いて`)}</div>`
+          : `<div class="card lock"><div class="w">FILE No.${n} ▸ LOCKED</div><div class="t">${redact(f.t)}</div><div class="b">解禁まで、あと${n - day}日</div></div>`;
+      });
+      const z = store.get("fileZero") === "1";
+      h += z
+        ? `<div class="card"><div class="w">FILE No.0 ▸ HIDDEN</div><div class="t">${esc(S.zero.t)}</div><div class="b">${esc(S.zero.b)}</div></div>`
+        : `<div class="card lock"><div class="w">FILE No.0 ▸ 合言葉が必要</div><form id="zeroF" class="row" style="display:flex;gap:6px;margin-top:6px"><input id="zeroIn" placeholder="合言葉" autocomplete="off"><button class="btn" type="submit">解除</button></form></div>`;
+    } else if (secTab === "ciph") {
+      h += `<div class="card"><div class="b">暗号は平日に1つずつ届くの。意味は${A}日たつと解読できるのよ。</div></div>`;
+      for (let i = day; i >= 1 && i > day - 30; i--) {
+        const left = i + A - day, c = cOf(i);
+        h += `<div class="card${left > 0 ? " lock" : ""}"><div class="w">INTERCEPT #${String(i).padStart(3, "0")}${i === day ? " ▸ TODAY" : ""}</div>
+          <div class="t" style="font-family:var(--jp);color:var(--ice)">「${esc(c.c)}」</div>
+          <div class="b">${left > 0 ? `解読まで、あと${left}日` : esc(c.a)}</div>${left > 0 ? "" : sayBtn(`暗号${i}番の答えを教えて`)}</div>`;
+      }
+    } else {
+      S.gaiden.forEach((g, k) => { h += `<div class="card"><div class="w">SPIN-OFF 第${k + 1}話</div><div class="t">${esc(g.t)}</div><div class="b">${esc(g.b)}</div>${sayBtn(`外伝の第${k + 1}話を話して`)}</div>`; });
+    }
+    box.innerHTML = h;
+    box.querySelectorAll("[data-q]").forEach((b) => b.onclick = () => { closeSheets(); talk(b.dataset.q); });
+    const zf = $("zeroF");
+    if (zf) zf.onsubmit = (e) => {
+      e.preventDefault();
+      const v = $("zeroIn").value.replace(/[\s、。！!？?・…]/g, "");
+      if (/^(真実は(一つ|ひとつ|1つ|１つ)|しんじつはひとつ)$/.test(v)) { store.set("fileZero", "1"); secRender(); }
+      else { $("zeroIn").value = ""; $("zeroIn").placeholder = "ちがうのよ。ヒントは自己紹介の最後"; }
+    };
+  }
+  $("secTabs").querySelectorAll("[data-t]").forEach((b) => b.onclick = () => {
+    secTab = b.dataset.t; $("secTabs").querySelectorAll("[data-t]").forEach((x) => x.classList.toggle("on", x === b)); secRender();
+  });
+  async function openSecret() { closeKeyboard(); $("secSheet").hidden = false; $("secBody").innerHTML = `<div class="card"><div class="w">ACCESSING…</div></div>`; await loadStory(); secRender(); }
+  $("secBtn").onclick = openSecret;
+  // 隠し: スタックのキャラを長押し(0.8秒)すると極秘アーカイブが開く
+  (() => {
+    let t = null, fired = false; const b = $("stackBtn");
+    b.addEventListener("pointerdown", () => { fired = false; t = setTimeout(() => { fired = true; openSecret(); }, 800); });
+    ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => b.addEventListener(ev, () => clearTimeout(t)));
+    b.addEventListener("click", (e) => { if (fired) { e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true);
+  })();
+  // 真ん中の小さな文字に、ときどき「今日の傍受通信」を流す(謎の通信)
+  loadStory().then((S) => {
+    if (!S) return;
+    const el = $("coreSub"), base = el.textContent;
+    let k = 0;
+    setInterval(() => {
+      k++;
+      const d = storyDay(), c = S.ciphers[(d - 1) % S.ciphers.length].c;
+      el.textContent = k % 3 === 2 ? `INTERCEPT #${String(d).padStart(3, "0")} ▸ ${c}` : base;
+    }, 6000);
+  });
   /* ---------------- 話しかけ(スマホが小さく読み上げ → スタックが聞き取る) ---------------- */
   const QUICK = ["おはよう", "今日の天気は？", "明日の天気は？", "今なんじ？", "おつかれさま", "自己紹介して"];
   $("quick").innerHTML = QUICK.map((q) => `<button class="chip" type="button">${esc(q)}</button>`).join("");
