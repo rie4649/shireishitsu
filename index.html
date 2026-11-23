@@ -275,7 +275,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "3.0";
+const PAGE_VER = "3.1";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -484,12 +484,18 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
       const r = await fetch(`${BRAIN_BOX}${TOPIC}.json?t=${Date.now()}`, { cache: "no-store" });
       if (r.ok) {
         const items = ((await r.json()).items || []).filter((x) => x && x.id);
-        let latest = null;
+        let latest = null; const fresh = [];
         for (const x of items) {
           const m = { id: "b" + x.id, time: (x.time || Date.now() / 1000) * 1000, title: x.title || "", text: x.text || "", data: x.data || null };
-          if (addLog(m) && (!latest || m.time > latest.time)) latest = m;
+          if (addLog(m)) { fresh.push(m); if (!latest || m.time > latest.time) latest = m; }
         }
-        if (latest && (!boxFirst || Date.now() - latest.time < 10 * 60000)) show(latest);
+        // MICで会話を表示している時は、スタック本体の本当の返事を会話の中に入れる(会話カードで上書きして消さない)
+        if (!boxFirst && micOn && fresh.length) {
+          fresh.sort((a, b) => a.time - b.time).forEach((m) => {
+            const body = m.title && m.title !== "スタック" ? `【${m.title}】${m.text}` : m.text;
+            convoAdd("スタック", body);
+          });
+        } else if (latest && (!boxFirst || Date.now() - latest.time < 10 * 60000)) show(latest);
         boxFirst = false;
       }
       boxOk = r.ok || r.status === 404;
@@ -762,14 +768,14 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     if (WAKE_HEAD.test(t)) {
       const rest = t.replace(/^.*?(スタック|すたっく|ｽﾀｯｸ|stack)[、。,!！\s]*/i, "").trim();
       if (rest) { convoAdd("あなた", rest); maybeResearch(rest); } else {
-        convo.waitUser = now + 12000; convoAdd("あなた", "スタック");
+        convo.waitUser = now + 30000; convoAdd("あなた", "スタック");
         clearTimeout(convo.missT);
-        convo.missT = setTimeout(() => { if (convo.waitUser) { convo.waitUser = 0; convoAdd("司令室", "そのあとの言葉が聞き取れなかったよ。もう一回、ゆっくり言ってね。"); } }, 12500);
+        convo.missT = setTimeout(() => { convo.waitUser = 0; }, 30000);
       }
       return;
     }
     if (now < convo.waitUser) { convo.waitUser = 0; clearTimeout(convo.missT); convoAdd("あなた", t); maybeResearch(t); return; }
-    if (now < convo.waitReply) { convo.waitReply = now + 15000; convoAdd("スタック", t); return; }
+    // スタックの返事は頭脳サーバーから本物が届くので、スマホのマイクで拾った声をスタックの言葉としては出さない
     // 呼びかけ前のまわりの声は出さない
   }
   function setMicUi(msg) {
