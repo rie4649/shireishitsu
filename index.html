@@ -414,7 +414,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "6.3";
+const PAGE_VER = "6.4";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -630,12 +630,21 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   /* ---------------- LOG ---------------- */
   function getLog() { try { return JSON.parse(store.get("stackLog") || "[]"); } catch { return []; } }
   function getGone() { try { return JSON.parse(store.get("logGone") || "[]"); } catch { return []; } }
+  // VER 6.4: 一度でも LOG に入れた通信は覚えておき、二度と入れない(消した物・30件からあふれた古い物が開き直すと戻る問題)
+  function getSeen() { try { return JSON.parse(store.get("logSeen") || "null"); } catch { return null; } }
+  if (!getSeen()) {  // この版に初めて来た時: 今ある物と消した物を覚え、今より前の通信はもう入れない
+    store.set("logSeen", JSON.stringify([...getLog().map((x) => x.id), ...getGone()].slice(-600)));
+    store.set("logFloor", String(Date.now()));
+  }
   function addLog(m) {
-    if (getGone().includes(m.id)) return false;
-    if (m.time && m.time < +(store.get("logClearedAt") || 0)) return false;
+    const seen = getSeen() || [];
+    if (seen.includes(m.id) || getGone().includes(m.id)) return false;
+    if (m.time && m.time < Math.max(+(store.get("logClearedAt") || 0), +(store.get("logFloor") || 0))) return false;
     const log = getLog();
     if (log.some((x) => x.id === m.id)) return false;
-    log.unshift(m); store.set("stackLog", JSON.stringify(log.slice(0, 30))); return true;
+    seen.push(m.id); store.set("logSeen", JSON.stringify(seen.slice(-600)));
+    log.unshift(m); log.sort((a, b) => (b.time || 0) - (a.time || 0));
+    store.set("stackLog", JSON.stringify(log.slice(0, 30))); return true;
   }
   function renderLog() {
     const log = getLog();
