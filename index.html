@@ -225,25 +225,36 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes breathe { 50% { opacity: .72; } }
 
-  /* 左右の演出パネル(数字の羅列・グラフ)。広い画面だけ */
-  .hud { position: absolute; top: 50%; transform: translateY(-50%); width: 168px; font-family: var(--mono); font-size: 10px;
-    letter-spacing: .08em; color: var(--dim); pointer-events: none; opacity: .9; }
-  .hud.l { left: 0; } .hud.r { right: 0; text-align: right; }
-  .hud .h { color: var(--glow2); letter-spacing: .18em; border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-bottom: 6px; }
-  .hud .stream { height: 150px; overflow: hidden; line-height: 1.5; white-space: pre; color: rgba(127,182,255,.7);
-    mask: linear-gradient(transparent, #000 25%, #000 75%, transparent); -webkit-mask: linear-gradient(transparent, #000 25%, #000 75%, transparent); }
-  .hud canvas { display: block; width: 100%; height: 56px; margin-top: 8px; }
-  .hud .kv { display: flex; justify-content: space-between; margin-top: 4px; }
-  .hud .kv b { color: #e6f1ff; font-weight: 400; }
-  .app.rxon .hud { opacity: .35; }
-  @media (max-width: 899px) { .hud { display: none; } }
-  /* スマホ: 真ん中の下に細い計器 */
-  .meter { position: absolute; left: 50%; bottom: 2px; transform: translateX(-50%); width: min(320px, 92%); display: flex; gap: 10px; align-items: center;
-    font-family: var(--mono); font-size: 10px; letter-spacing: .12em; color: var(--dim); pointer-events: none; }
-  .meter canvas { flex: 1; height: 26px; min-width: 0; }
-  .meter b { color: var(--glow2); font-weight: 400; }
-  .app.rxon .meter { opacity: .3; }
-  @media (min-width: 900px) { .meter { display: none; } }
+  /* VER 5.2 演出: 数字の羅列とグラフ(意味はない飾り)。すべての画面で出す */
+  .fx { position: absolute; inset: 0; pointer-events: none; font-family: var(--mono); color: var(--dim); }
+  .fx .h { font-size: 9px; letter-spacing: .16em; color: var(--glow2); display: flex; justify-content: space-between; gap: 6px;
+    border-bottom: 1px solid var(--line); padding-bottom: 3px; margin-bottom: 4px; }
+  .fx .h b { color: #e6f1ff; font-weight: 400; }
+  .fx pre { font: inherit; font-size: 9px; line-height: 1.38; color: rgba(127,182,255,.75); white-space: pre; overflow: hidden; margin: 0;
+    mask: linear-gradient(transparent, #000 30%, #000 80%, transparent); -webkit-mask: linear-gradient(transparent, #000 30%, #000 80%, transparent); }
+  .fx canvas { display: block; width: 100%; }
+  .fxp { position: absolute; top: 0; width: min(34%, 230px); }
+  .fxp.tl { left: 0; } .fxp.tr { right: 0; }
+  .fxp.tl pre { height: 88px; }
+  .fxp.tr canvas { height: 40px; }
+  .fxp .kv { display: flex; justify-content: space-between; font-size: 9px; margin-top: 3px; }
+  .fxp .kv b { color: #e6f1ff; font-weight: 400; }
+  .fxrow { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .fxrow canvas { height: 34px; }
+  .fxside { position: absolute; top: 50%; transform: translateY(-50%); width: 64px; display: none; }
+  .fxside.l { left: 0; } .fxside.r { right: 0; text-align: right; }
+  .fxside pre { height: 220px; font-size: 9px; }
+  #fxTags span { position: absolute; font-size: 9px; letter-spacing: .1em; color: #9fd0ff; text-shadow: 0 0 6px #3d8bff;
+    padding: 1px 4px; border-left: 1px solid rgba(159,208,255,.7); opacity: 0; transition: opacity .5s; white-space: nowrap; }
+  #fxTags span.on { opacity: .85; }
+  .app.rxon .fx { opacity: .3; }
+  .app.recv .fx .h { color: #fff; }
+  @media (min-width: 900px) {
+    .fx .h, .fxp .kv { font-size: 11px; } .fx pre { font-size: 11px; }
+    .fxp.tl pre { height: 150px; } .fxp.tr canvas { height: 70px; } .fxrow canvas { height: 56px; }
+    .fxrow { left: 18%; right: 18%; gap: 18px; } .fxside { display: block; width: 120px; }
+  }
+  @media (max-width: 899px) { .core { width: min(70vw, 40vh, 420px); } }
 
   /* 決まり文句(おはよう・天気など)はいちばん下に小さく */
   .quickbar { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; justify-content: safe center; }
@@ -268,12 +279,18 @@
       <div class="ring r1"></div><div class="ticks"></div><div class="ring r2"></div><div class="ring r4"></div><div class="ring r3"></div>
       <div class="txt"><div class="big" id="stBig">STANDBY</div><div class="st" id="st">通信待機中</div><div class="sub2" id="coreSub">CODE: STACK ▸ CH-01</div></div>
     </div>
-    <aside class="hud l" aria-hidden="true"><div class="h">DATA STREAM</div><div class="stream" id="hudL"></div>
-      <div class="kv"><span>NODE</span><b id="hudNode">--</b></div><div class="kv"><span>SYNC</span><b id="hudSync">--</b></div></aside>
-    <aside class="hud r" aria-hidden="true"><div class="h">SIGNAL</div><canvas id="hudG"></canvas>
-      <div class="kv"><span>LINK</span><b id="hudLink">--</b></div><div class="kv"><span>UPTIME</span><b id="hudUp">--</b></div>
-      <div class="stream" id="hudR" style="height:84px;margin-top:8px"></div></aside>
-    <div class="meter" aria-hidden="true"><span>SIG</span><canvas id="meterG"></canvas><b id="meterV">--</b></div>
+    <div class="fx" aria-hidden="true">
+      <div class="fxp tl"><div class="h"><span>DATA//STREAM</span><b id="fxCnt">0000</b></div><pre id="fxA"></pre></div>
+      <div class="fxp tr"><div class="h"><span>SIGNAL//SCAN</span><b id="fxSig">--</b></div><canvas id="fxLine"></canvas>
+        <div class="kv"><span>SYNC</span><b id="fxSync">--</b></div><div class="kv"><span>LINK</span><b id="fxLink">--</b></div><div class="kv"><span>UPTIME</span><b id="fxUp">--</b></div></div>
+      <div class="fxside l"><pre id="fxS1"></pre></div><div class="fxside r"><pre id="fxS2"></pre></div>
+      <div class="fxrow">
+        <div><div class="h"><span>FREQ</span><b id="fxF">--</b></div><canvas id="fxBars"></canvas></div>
+        <div><div class="h"><span>LOAD</span><b id="fxL">--</b></div><canvas id="fxArea"></canvas></div>
+        <div><div class="h"><span>NODE</span><b id="fxN">--</b></div><canvas id="fxDots"></canvas></div>
+      </div>
+      <div id="fxTags"></div>
+    </div>
     <section class="rx" id="rx" aria-live="polite">
       <button class="ghost x" id="rxClose" type="button" aria-label="閉じる">×</button>
       <div class="hd"><span>◤ INCOMING ▸ STACK</span><span class="when" id="rxWhen"></span></div>
@@ -372,7 +389,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "5.1";
+const PAGE_VER = "5.2";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -789,7 +806,8 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
      本体が寝ている時は、スマホから「スタック」と声をかけて起こしてから送り直す。 */
   const ASK_URL = "https://stack-brain-660948285864.asia-northeast1.run.app/ask";
   let talking = false;
-  const askSt = (s) => { $("heard").textContent = s; };
+  let askStT = 0;
+  const askSt = (s) => { $("heard").textContent = s; clearTimeout(askStT); if (s) askStT = setTimeout(() => { if ($("heard").textContent === s) $("heard").textContent = ""; }, 15000); };
   async function askOnce(text) {
     const r = await fetch(ASK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: TOPIC, text }) });
     return r.json().catch(() => ({ ok: false, reason: "http" + r.status }));
@@ -1093,47 +1111,89 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
 })();
 
 /* =========================================================
-   VER 5.0 演出: 数字の羅列・信号グラフ・受信中は真ん中を下げる
+   VER 5.2 演出: 数字の羅列・いくつものグラフ・飛び交う札(どれも飾り)
    ========================================================= */
 (() => {
   const $ = (id) => document.getElementById(id);
   const app = $("app"), rx = $("rx");
   new MutationObserver(() => app.classList.toggle("rxon", rx.classList.contains("show"))).observe(rx, { attributes: true, attributeFilter: ["class"] });
   const HEX = "0123456789ABCDEF", hx = (n) => Array.from({ length: n }, () => HEX[(Math.random() * 16) | 0]).join("");
-  const lineL = () => `${hx(4)} ${hx(4)} ${hx(2)}.${hx(2)} ${(Math.random() * 99.9).toFixed(1).padStart(4, "0")}`;
-  const lineR = () => `${(Math.random() * 360).toFixed(2).padStart(6, "0")}° ${hx(6)}`;
-  const L = Array.from({ length: 12 }, lineL), R = Array.from({ length: 6 }, lineR);
+  const num = (a, b, d = 1) => (a + Math.random() * (b - a)).toFixed(d);
+  const lines = {
+    fxA: () => `${hx(4)}:${hx(4)} ${num(0, 99.9).padStart(4, "0")} ${hx(2)}`,
+    fxS1: () => `${hx(6)}`, fxS2: () => `${num(0, 359.99, 2).padStart(6, "0")}`,
+  };
+  const buf = { fxA: [], fxS1: [], fxS2: [] };
+  Object.keys(buf).forEach((k) => { for (let i = 0; i < 24; i++) buf[k].push(lines[k]()); });
+  const N = 64, line = Array(N).fill(.5), area = Array(N).fill(.4), bars = Array(18).fill(.3), dots = [];
+  for (let i = 0; i < 26; i++) dots.push({ x: Math.random(), y: Math.random(), a: Math.random() });
   const t0 = Date.now();
-  const series = Array.from({ length: 60 }, () => .5);
-  let ph = 0;
-  function draw(cv) {
-    if (!cv || !cv.offsetParent) return;
+  let ph = 0, cnt = 0;
+  function ctx(cv) {
+    if (!cv || !cv.offsetParent) return null;
     const w = cv.clientWidth, h = cv.clientHeight, d = Math.min(devicePixelRatio || 1, 2);
-    if (cv.width !== w * d) { cv.width = w * d; cv.height = h * d; }
+    if (cv.width !== Math.round(w * d) || cv.height !== Math.round(h * d)) { cv.width = Math.round(w * d); cv.height = Math.round(h * d); }
     const c = cv.getContext("2d"); c.setTransform(d, 0, 0, d, 0, 0); c.clearRect(0, 0, w, h);
-    c.strokeStyle = "rgba(120,175,255,.18)"; c.lineWidth = 1;
+    c.strokeStyle = "rgba(120,175,255,.16)"; c.lineWidth = 1;
     for (let i = 1; i < 4; i++) { c.beginPath(); c.moveTo(0, h * i / 4); c.lineTo(w, h * i / 4); c.stroke(); }
-    c.beginPath();
-    series.forEach((v, i) => { const x = i / (series.length - 1) * w, y = h - v * h; i ? c.lineTo(x, y) : c.moveTo(x, y); });
-    c.strokeStyle = "#7fb6ff"; c.lineWidth = 1.5; c.shadowColor = "#3d8bff"; c.shadowBlur = 6; c.stroke(); c.shadowBlur = 0;
-    const lx = w, ly = h - series[series.length - 1] * h;
-    c.fillStyle = "#cfe3ff"; c.beginPath(); c.arc(lx - 2, ly, 2, 0, 6.283); c.fill();
+    return { c, w, h };
+  }
+  function drawLine() {
+    const g = ctx($("fxLine")); if (!g) return; const { c, w, h } = g;
+    c.beginPath(); line.forEach((v, i) => { const x = i / (N - 1) * w, y = h - v * h; i ? c.lineTo(x, y) : c.moveTo(x, y); });
+    c.strokeStyle = "#7fb6ff"; c.lineWidth = 1.4; c.shadowColor = "#3d8bff"; c.shadowBlur = 6; c.stroke(); c.shadowBlur = 0;
+    c.beginPath(); line.forEach((v, i) => { const x = i / (N - 1) * w, y = h - (1 - v) * h * .6 - h * .2; i ? c.lineTo(x, y) : c.moveTo(x, y); });
+    c.strokeStyle = "rgba(255,207,122,.55)"; c.lineWidth = 1; c.stroke();
+  }
+  function drawBars() {
+    const g = ctx($("fxBars")); if (!g) return; const { c, w, h } = g, bw = w / bars.length;
+    bars.forEach((v, i) => { const bh = v * h; const gr = c.createLinearGradient(0, h - bh, 0, h);
+      gr.addColorStop(0, "#cfe3ff"); gr.addColorStop(1, "rgba(61,139,255,.35)"); c.fillStyle = gr; c.fillRect(i * bw + 1, h - bh, bw - 2, bh); });
+  }
+  function drawArea() {
+    const g = ctx($("fxArea")); if (!g) return; const { c, w, h } = g;
+    c.beginPath(); c.moveTo(0, h); area.forEach((v, i) => c.lineTo(i / (N - 1) * w, h - v * h)); c.lineTo(w, h); c.closePath();
+    const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "rgba(127,182,255,.55)"); gr.addColorStop(1, "rgba(61,139,255,0)");
+    c.fillStyle = gr; c.fill();
+    c.beginPath(); area.forEach((v, i) => { const x = i / (N - 1) * w, y = h - v * h; i ? c.lineTo(x, y) : c.moveTo(x, y); });
+    c.strokeStyle = "#9fd0ff"; c.lineWidth = 1.2; c.stroke();
+  }
+  function drawDots() {
+    const g = ctx($("fxDots")); if (!g) return; const { c, w, h } = g;
+    const sx = ((Date.now() / 18) % (w + 40)) - 20;
+    c.fillStyle = "rgba(61,139,255,.12)"; c.fillRect(Math.max(0, sx - 20), 0, 20, h);
+    c.strokeStyle = "#7fb6ff"; c.beginPath(); c.moveTo(sx, 0); c.lineTo(sx, h); c.stroke();
+    dots.forEach((p) => { const near = Math.abs(p.x * w - sx) < 24; p.a = near ? 1 : p.a * .985;
+      c.fillStyle = `rgba(207,227,255,${.15 + p.a * .85})`; c.beginPath(); c.arc(p.x * w, p.y * h, near ? 2.2 : 1.5, 0, 6.283); c.fill(); });
+  }
+  const tags = $("fxTags");
+  function tag() {
+    const core = $("core"); if (!core || !tags) return;
+    const cr = core.getBoundingClientRect(), pr = tags.parentElement.getBoundingClientRect();
+    const ang = Math.random() * 6.283, rad = cr.width / 2 * (1.02 + Math.random() * .12);
+    const el = document.createElement("span");
+    el.textContent = [`${hx(4)}-${hx(2)}`, `${num(0, 99.9)}%`, `LAT ${num(36, 37, 4)}`, `CH-${(Math.random() * 99 | 0).toString().padStart(2, "0")}`, `${num(0, 999, 0)}ms`, `SEC ${hx(3)}`][Math.random() * 6 | 0];
+    el.style.left = `${Math.max(0, Math.min(pr.width - 90, cr.left - pr.left + cr.width / 2 + Math.cos(ang) * rad))}px`;
+    el.style.top = `${cr.top - pr.top + cr.height / 2 + Math.sin(ang) * rad}px`;
+    tags.appendChild(el); requestAnimationFrame(() => el.classList.add("on"));
+    setTimeout(() => el.classList.remove("on"), 1800); setTimeout(() => el.remove(), 2400);
   }
   function tick() {
-    const recv = app.classList.contains("recv");
-    ph += recv ? .6 : .18;
-    const v = .5 + Math.sin(ph) * (recv ? .32 : .14) + (Math.random() - .5) * (recv ? .3 : .12);
-    series.push(Math.max(.04, Math.min(.96, v))); series.shift();
-    L.push(lineL()); L.shift(); if (Math.random() < .4) { R.push(lineR()); R.shift(); }
-    if ($("hudL").offsetParent) { $("hudL").textContent = L.join("\n"); $("hudR").textContent = R.join("\n"); }
+    const recv = app.classList.contains("recv"), k = recv ? 2.2 : 1;
+    ph += .17 * k; cnt = (cnt + 1 + (Math.random() * 7 | 0)) % 10000;
+    line.push(Math.max(.05, Math.min(.95, .5 + Math.sin(ph) * .16 * k + (Math.random() - .5) * .14 * k))); line.shift();
+    area.push(Math.max(.05, Math.min(.95, area[N - 1] + (Math.random() - .5) * .14 * k))); area.shift();
+    for (let i = 0; i < bars.length; i++) bars[i] = Math.max(.06, Math.min(1, bars[i] * .6 + Math.random() * .5 * k * (1 - Math.abs(i - bars.length / 2) / bars.length)));
+    Object.keys(buf).forEach((key) => { buf[key].push(lines[key]()); buf[key].shift(); const el = $(key); if (el && el.offsetParent) el.textContent = buf[key].join("\n"); });
     const up = Math.floor((Date.now() - t0) / 1000);
-    $("hudUp").textContent = `${String(Math.floor(up / 3600)).padStart(2, "0")}:${String(Math.floor(up / 60) % 60).padStart(2, "0")}:${String(up % 60).padStart(2, "0")}`;
-    $("hudLink").textContent = $("link").textContent;
-    $("hudNode").textContent = hx(4); $("hudSync").textContent = `${(97 + Math.random() * 2.9).toFixed(1)}%`;
-    $("meterV").textContent = `${Math.round(series[series.length - 1] * 100)}`;
-    draw($("hudG")); draw($("meterG"));
+    $("fxUp").textContent = `${String(up / 3600 | 0).padStart(2, "0")}:${String((up / 60 | 0) % 60).padStart(2, "0")}:${String(up % 60).padStart(2, "0")}`;
+    $("fxLink").textContent = $("link").textContent; $("fxCnt").textContent = String(cnt).padStart(4, "0");
+    $("fxSig").textContent = Math.round(line[N - 1] * 100); $("fxSync").textContent = `${num(97, 99.9)}%`;
+    $("fxF").textContent = `${num(2.4, 5.8, 2)}GHz`; $("fxL").textContent = `${Math.round(area[N - 1] * 100)}%`; $("fxN").textContent = hx(4);
+    drawLine(); drawBars(); drawArea(); drawDots();
+    if (Math.random() < (recv ? .5 : .22)) tag();
   }
-  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) setInterval(tick, 160); else tick();
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) setInterval(tick, 140); else tick();
 })();
 
 /* =========================================================
