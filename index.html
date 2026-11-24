@@ -95,7 +95,10 @@
   .rx .viz td { padding: 6px 8px; border-top: 1px solid rgba(120,175,255,.14); vertical-align: top; }
   .rx .viz tr:nth-child(even) td { background: rgba(61,139,255,.06); }
   .rx .viz .msg { font-size: 12px; color: var(--warn); }
-  .rx .links .lknote { width: 100%; font-size: 12px; color: var(--dim); margin-top: 2px; }
+  /* VER 7.2: 注意書きははっきり見える大きさと色に(川村さん「見にくい」) */
+  .rx .links .lknote { width: 100%; font-size: 15px; font-weight: 700; line-height: 1.5; color: #ffd166;
+    background: rgba(255, 209, 102, .12); border: 1px solid rgba(255, 209, 102, .7); border-radius: 8px;
+    padding: 8px 12px; margin-top: 4px; }
   .rx .viz .ccard { padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--glow); border-radius: 8px; background: rgba(61,139,255,.12); }
   .rx .viz .ccard .cn { font-family: var(--jp); font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 6px; }
   .rx .viz .ccard .ctel { display: inline-block; font-size: 20px; font-weight: 700; color: #fff; text-decoration: none; padding: 6px 14px; margin: 2px 0 6px; border: 2px solid var(--glow); border-radius: 999px; background: rgba(61,139,255,.3); }
@@ -441,7 +444,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "7.1";
+const PAGE_VER = "7.2";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -585,8 +588,8 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
       hits = APP_LINKS.filter((a) => a.url === CLIENTS_URL);
     }
     box.innerHTML = hits.map((a) => `<a class="lk" href="${a.url}" target="_blank" rel="noopener">▸ ${a.label}</a>`).join("")
-      + (hits.some((a) => a.url === CLIENTS_URL) ? `<div class="lknote">※取引先情報は一覧が開くので、開いたら自分で会社を検索してね</div>` : "")
-      + (hits.some((a) => a.url === TANKA_URL) ? `<div class="lknote">※単価管理は開くときにパスワードが必要よ</div>` : "");
+      + (hits.some((a) => a.url === CLIENTS_URL) ? `<div class="lknote">🔎 取引先情報は一覧が開くので、開いたら自分で会社を検索してね</div>` : "")
+      + (hits.some((a) => a.url === TANKA_URL) ? `<div class="lknote">🔑 単価管理を開くにはパスワードが必要よ</div>` : "");
     box.hidden = !hits.length;
   }
   function show(msg, opts = {}) {
