@@ -435,7 +435,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "6.7";
+const PAGE_VER = "6.8";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -552,6 +552,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     $("app").classList.toggle("recv", big !== "STANDBY");
   }
   /* VER 5.9: 答えに関係するアプリのページへ飛べるボタン */
+  let lastViz = null;   // VER 6.8: 最後に届いた地図・表(すぐ後の答えのカードにも一緒に出す)
   // VER 6.7: 開くボタンは「今の質問」に合うものだけ(前の会話の分は出さない)。会社・住所・地図は点検ラクラクの取引先情報
   const CLIENTS_URL = "https://rie4649.github.io/tenken-rakuraku/clients.html?v=2";
   const APP_LINKS = [
@@ -578,6 +579,9 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     box.hidden = !hits.length;
   }
   function show(msg, opts = {}) {
+    // VER 6.8: 地図・表のすぐ後(3分以内)に届いた答えは、カードに地図・表もつけて出す(答えで地図が消えないように)
+    if (!msg.map && !msg.table && lastViz && (msg.id === "convo" || /スタック/.test(msg.title || "")) && Math.abs((msg.time || Date.now()) - lastViz.time) < 180000)
+      msg = { ...msg, map: lastViz.map, table: lastViz.table };
     current = msg;
     clearInterval(typeTimer); clearTimeout(hideTimer);
     rx.classList.toggle("convo", msg.id === "convo");
@@ -777,11 +781,13 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
         for (const x of items) {
           const m = { id: "b" + x.id, time: (x.time || Date.now() / 1000) * 1000, title: x.title || "", text: x.text || "", data: x.data || null, map: x.map || null, table: x.table || null };
           if (addLog(m)) { fresh.push(m); if (!latest || m.time > latest.time) latest = m; }
+          if ((m.map || m.table) && (!lastViz || m.time > lastViz.time)) lastViz = m;
         }
         // MICで会話を表示している時は、スタック本体の本当の返事を会話の中に入れる(会話カードで上書きして消さない)
         if (!boxFirst && fresh.length) {
           fresh.sort((a, b) => a.time - b.time).forEach((m) => {
-            if (m.map || m.table) { setTimeout(() => show(m), 1500); return; }   // 図は会話カードにせず、そのまま大きく出す
+            // 図: 会話中なら会話カードに地図・表をつける。会話していない時は図をそのまま大きく出す
+            if (m.map || m.table) { lastViz = m; setTimeout(() => show(current && current.id === "convo" ? { ...current, time: Date.now(), map: null, table: null } : m), 1500); return; }
             if (m.title === "司令室から") return;               // 司令室から聞いた言葉はもう出している
             if (m.title === "本体") { convoAdd("あなた(本体)", m.text); return; }
             const body = m.title && m.title !== "スタック" ? `【${m.title}】${m.text}` : m.text;
@@ -1102,6 +1108,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   const hms = () => { const n = jst(); return `${p2(n.getHours())}:${p2(n.getMinutes())}:${p2(n.getSeconds())}`; };
   function convoAdd(who, text) {
     if (!text) return;
+    if (/^あなた/.test(who)) lastViz = null;   // 新しい質問では前の地図を出さない
     convo.lines.push({ who, text, t: hms() });
     if (convo.lines.length > 14) convo.lines.shift();
 
