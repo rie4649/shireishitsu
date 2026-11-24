@@ -142,6 +142,7 @@
   }
   @media (max-width: 380px) {
     .askrow #micBtn .dot { display: none; }
+    .btns { gap: 5px; } .btns button.chip { padding: 5px 7px; letter-spacing: .06em; } #homeAdd .hl { display: none; }
     .askrow #micBtn, .askrow #kbBtn, .askrow #kbBtn span, .askrow #micBtn span { font-size: 13px; }
   }
   .askrow button.kbbtn { flex-direction: row; gap: 8px; padding: 0 10px; font-family: var(--jp); font-size: 19px; font-weight: 700;
@@ -357,6 +358,7 @@
         <button class="chip" id="secBtn" type="button" title="本日の任務報告">REPORT</button>
         <button class="chip" id="logBtn" type="button">LOG</button>
         <button class="chip" id="setBtn" type="button">SET</button>
+        <button class="chip" id="homeAdd" type="button" title="ホーム画面に追加" aria-label="ホーム画面に追加">⊕<span class="hl"> HOME</span></button>
       </div>
     </div>
     <button class="stack" id="stackBtn" type="button" aria-label="スタック（押すと最後の答えをもう一度）">
@@ -400,6 +402,14 @@
   <div id="memoList"></div>
 </div></div>
 
+<div class="sheet" id="homeSheet" hidden><div class="in set">
+  <div class="hd"><span>ADD TO HOME</span><button class="ghost" data-close type="button" aria-label="閉じる">×</button></div>
+  <p><b>司令室をホーム画面に置く</b><br>アプリみたいに、ホーム画面のマークから一発で開けるようになるのよ。</p>
+  <div id="homeSteps"></div>
+  <div class="row"><button class="btn" id="homeInstall" type="button" hidden>ホーム画面に追加する</button></div>
+  <div class="note" id="homeNote"></div>
+</div></div>
+
 <div class="sheet" id="setSheet" hidden><div class="in set">
   <div class="hd"><span>SETTINGS</span><button class="ghost" data-close type="button" aria-label="閉じる">×</button></div>
   <p><b>通信キー</b><br>スタックの道具プログラム(パソコン)の settings.txt に貼る合いカギよ。チャットには貼らないでね。</p>
@@ -425,7 +435,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "6.5";
+const PAGE_VER = "6.6";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -681,6 +691,27 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     // 消したものが頭脳サーバーから読み直されて戻らないよう、消した時刻より前の受信は表示しない
     store.set("stackLog", "[]"); store.set("logClearedAt", String(Date.now()));
     renderLog(); $("logClear").textContent = "消去したよ";
+  };
+  /* ---------------- VER 6.6: ホーム画面に追加 ---------------- */
+  let installEvt = null;
+  const isHomeApp = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; });
+  if (isHomeApp()) $("homeAdd").hidden = true;
+  $("homeAdd").onclick = () => {
+    closeKeyboard();
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    $("homeNote").textContent = "";
+    $("homeInstall").hidden = !installEvt;
+    $("homeSteps").innerHTML = installEvt ? "<p>下のボタンを押すと、ホーム画面に「司令室」が置かれるよ。</p>"
+      : ios ? "<p>① 画面の下(または上)の <b>共有ボタン</b>(四角から↑が出ているマーク)を押す<br>② 下にずらして <b>「ホーム画面に追加」</b> を押す<br>③ 名前が「司令室」になっているのを見て、右上の <b>「追加」</b> を押す</p><p style=\"opacity:.7\">Safariで開いている時にできるよ。LINEなどの中で開いている時は、右下のマークから「Safariで開く」を先に押してね。</p>"
+      : "<p>① 右上の <b>︙</b>(メニュー)を押す<br>② <b>「ホーム画面に追加」</b>(または「アプリをインストール」)を押す<br>③ <b>「追加」</b> を押す</p>";
+    $("homeSheet").hidden = false;
+  };
+  $("homeInstall").onclick = async () => {
+    if (!installEvt) return;
+    installEvt.prompt();
+    try { const r = await installEvt.userChoice; $("homeNote").textContent = r.outcome === "accepted" ? "置いたよ。ホーム画面を見てね。" : "やめたのね。またいつでもどうぞ。"; } catch {}
+    installEvt = null; $("homeInstall").hidden = true;
   };
   $("setBtn").onclick = () => { closeKeyboard(); $("setNote").textContent = ""; $("setSheet").hidden = false; };
   $("copyKey").onclick = async () => {
