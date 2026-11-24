@@ -435,7 +435,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "6.6";
+const PAGE_VER = "6.7";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -552,18 +552,28 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     $("app").classList.toggle("recv", big !== "STANDBY");
   }
   /* VER 5.9: 答えに関係するアプリのページへ飛べるボタン */
+  // VER 6.7: 開くボタンは「今の質問」に合うものだけ(前の会話の分は出さない)。会社・住所・地図は点検ラクラクの取引先情報
+  const CLIENTS_URL = "https://rie4649.github.io/tenken-rakuraku/clients.html?v=2";
   const APP_LINKS = [
-    { re: /組織図|体制|SDGs|ISO|アイエスオー|環境|マニュアル|台帳|カレンダー|パトロール|法令|教育|研修/, label: "ISO管理を開く", url: "https://rie4649.github.io/iso-kanri/" },
-    { re: /置き場|社内案内|社内図|トラック|車両|車検|タイヤ|駐車/, label: "トラック管理を開く", url: "https://rie4649.github.io/truck-kanri/" },
-    { re: /契約|取引先|処分先|従業員|就業|マスター/, label: "マスター管理を開く", url: "https://rie4649.github.io/sekine-master/" },
-    { re: /電話依頼|電話の依頼/, label: "電話依頼を開く", url: "https://rie4649.github.io/denwa-irai/" },
-    { re: /点検/, label: "点検ラクラクを開く", url: "https://rie4649.github.io/tenken-rakuraku/" },
+    { re: /会社|住所|地図|場所|どこ|取引先|引き?取り?先|回収先|電話番号|株|㈱|有限|製作所|工業|商事|商店|工場/, label: "取引先情報を開く", url: CLIENTS_URL },
+    { re: /電話依頼|電話の依頼|折り返し/, label: "電話依頼を開く", url: "https://rie4649.github.io/denwa-irai/" },
+    { re: /日常点検|点検ラクラク|点検終わ|午前の確認|午後の確認/, label: "点検ラクラクを開く", url: "https://rie4649.github.io/tenken-rakuraku/" },
+    { re: /置き場|社内案内|社内図|トラック|車両|車検|タイヤ|駐車|不具合/, label: "トラック管理を開く", url: "https://rie4649.github.io/truck-kanri/" },
+    { re: /組織図|体制|SDGs|ISO|アイエスオー|環境|マニュアル|台帳|カレンダー|パトロール|法令|教育|研修|理念|方針/, label: "ISO管理を開く", url: "https://rie4649.github.io/iso-kanri/" },
+    { re: /契約|処分先|従業員|就業|マスター/, label: "マスター管理を開く", url: "https://rie4649.github.io/sekine-master/" },
   ];
   function renderLinks(msg) {
     let box = $("rxLinks");
     if (!box) { box = document.createElement("div"); box.id = "rxLinks"; box.className = "links"; $("rxSay").after(box); }
-    const hay = (msg.text || "") + " " + Object.keys(msg.data || {}).map((k) => k + " " + msg.data[k]).join(" ");
-    const hits = msg.id === "convo" ? APP_LINKS.filter((a) => a.re.test(hay)).slice(0, 3) : [];
+    let hits = [];
+    if (msg.id === "convo") {
+      const q = msg.q || "";
+      hits = APP_LINKS.filter((a) => a.re.test(q));                       // まず質問の言葉で選ぶ
+      if (!hits.length) hits = APP_LINKS.filter((a) => a.re.test(msg.text || ""));  // 無ければ今の答えで
+      hits = hits.slice(0, 2);
+    } else if (msg.map) {
+      hits = [APP_LINKS[0]];
+    }
     box.innerHTML = hits.map((a) => `<a class="lk" href="${a.url}" target="_blank" rel="noopener">▸ ${a.label}</a>`).join("");
     box.hidden = !hits.length;
   }
@@ -1097,7 +1107,8 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
 
     const last = convo.lines[convo.lines.length - 1], data = {};
     convo.lines.slice(0, -1).reverse().forEach((l) => { let k = `${l.t} ${l.who}`; while (k in data) k += " "; data[k] = l.text; });
-    show({ id: "convo", time: Date.now(), title: "スタックとの会話", text: `${last.who}：${last.text}`, data });
+    const lastQ = [...convo.lines].reverse().find((l) => /^あなた/.test(l.who));
+    show({ id: "convo", time: Date.now(), title: "スタックとの会話", text: `${last.who}：${last.text}`, data, q: lastQ ? lastQ.text : "" });
   }
   function heard(raw) {
     const t = raw.trim(); if (!t) return;
