@@ -95,6 +95,7 @@
   .rx .viz td { padding: 6px 8px; border-top: 1px solid rgba(120,175,255,.14); vertical-align: top; }
   .rx .viz tr:nth-child(even) td { background: rgba(61,139,255,.06); }
   .rx .viz .msg { font-size: 12px; color: var(--warn); }
+  .rx .links .lknote { width: 100%; font-size: 12px; color: var(--dim); margin-top: 2px; }
   .rx .viz .ccard { padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--glow); border-radius: 8px; background: rgba(61,139,255,.12); }
   .rx .viz .ccard .cn { font-family: var(--jp); font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 6px; }
   .rx .viz .ccard .ctel { display: inline-block; font-size: 20px; font-weight: 700; color: #fff; text-decoration: none; padding: 6px 14px; margin: 2px 0 6px; border: 2px solid var(--glow); border-radius: 999px; background: rgba(61,139,255,.3); }
@@ -440,7 +441,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "6.9";
+const PAGE_VER = "7.0";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -580,7 +581,8 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     } else if (msg.map) {
       hits = [APP_LINKS[0]];
     }
-    box.innerHTML = hits.map((a) => `<a class="lk" href="${a.url}" target="_blank" rel="noopener">▸ ${a.label}</a>`).join("");
+    box.innerHTML = hits.map((a) => `<a class="lk" href="${a.url}" target="_blank" rel="noopener">▸ ${a.label}</a>`).join("")
+      + (hits.some((a) => a.url === CLIENTS_URL) ? `<div class="lknote">※取引先情報は一覧が開くので、開いたら自分で会社を検索してね</div>` : "");
     box.hidden = !hits.length;
   }
   function show(msg, opts = {}) {
@@ -650,6 +652,14 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     // VER 6.9: 会社カード(会社名・電話(押すとかける)・住所・地図・契約・電話依頼)
     let head = "", tail = "";
     const card = msg.card;
+    if (card && Array.isArray(card.choices)) {
+      // VER 7.0: 工場・支店がいくつもある会社は、どこか聞き直す一覧
+      box.innerHTML = `<div class="ccard"><div class="cn">${esc(card.name || "")}</div><div class="cad">どこの工場か、スタックに言ってね(例:「屋代工場」)</div></div>`
+        + card.choices.map((c) => `<div class="ccard"><div class="cn" style="font-size:16px">${esc(c.name || "")}</div>`
+          + (c.tel ? `<a class="ctel" style="font-size:16px" href="tel:${String(c.tel).replace(/[^\d+]/g, "")}">📞 ${esc(c.tel)}</a>` : "")
+          + (c.address ? `<div class="cad">📍 ${esc(c.address)}</div>` : "") + `</div>`).join("");
+      box.hidden = false; rx.classList.add("wide"); return;
+    }
     if (card) {
       const tel = String(card.tel || "").replace(/[^\d+]/g, "");
       head = `<div class="ccard"><div class="cn">${esc(card.name || "")}</div>`
