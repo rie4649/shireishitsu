@@ -95,6 +95,11 @@
   .rx .viz td { padding: 6px 8px; border-top: 1px solid rgba(120,175,255,.14); vertical-align: top; }
   .rx .viz tr:nth-child(even) td { background: rgba(61,139,255,.06); }
   .rx .viz .msg { font-size: 12px; color: var(--warn); }
+  .rx .viz .ccard { padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--glow); border-radius: 8px; background: rgba(61,139,255,.12); }
+  .rx .viz .ccard .cn { font-family: var(--jp); font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+  .rx .viz .ccard .ctel { display: inline-block; font-size: 20px; font-weight: 700; color: #fff; text-decoration: none; padding: 6px 14px; margin: 2px 0 6px; border: 2px solid var(--glow); border-radius: 999px; background: rgba(61,139,255,.3); }
+  .rx .viz .cad { font-size: 14px; line-height: 1.6; color: var(--ice); }
+  .rx .viz .csec { margin: 10px 0 4px; font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--glow2); }
   .rx.wide { width: min(820px, 100%); }
   .rx .bar { height: 2px; background: var(--glow); margin-top: 12px; transform-origin: left; }
   @keyframes blink { 50% { opacity: .2; } }
@@ -435,7 +440,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "6.8";
+const PAGE_VER = "6.9";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -580,8 +585,8 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   }
   function show(msg, opts = {}) {
     // VER 6.8: 地図・表のすぐ後(3分以内)に届いた答えは、カードに地図・表もつけて出す(答えで地図が消えないように)
-    if (!msg.map && !msg.table && lastViz && (msg.id === "convo" || /スタック/.test(msg.title || "")) && Math.abs((msg.time || Date.now()) - lastViz.time) < 180000)
-      msg = { ...msg, map: lastViz.map, table: lastViz.table };
+    if (!msg.map && !msg.table && !msg.card && lastViz && (msg.id === "convo" || /スタック/.test(msg.title || "")) && Math.abs((msg.time || Date.now()) - lastViz.time) < 180000)
+      msg = { ...msg, map: lastViz.map, table: lastViz.table, card: lastViz.card };
     current = msg;
     clearInterval(typeTimer); clearTimeout(hideTimer);
     rx.classList.toggle("convo", msg.id === "convo");
@@ -642,9 +647,26 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
       box.innerHTML = `<div class="tbl"><table><thead><tr>${th}</tr></thead><tbody>${tb}</tbody></table></div>`;
       box.hidden = false; rx.classList.add("wide"); return;
     }
+    // VER 6.9: 会社カード(会社名・電話(押すとかける)・住所・地図・契約・電話依頼)
+    let head = "", tail = "";
+    const card = msg.card;
+    if (card) {
+      const tel = String(card.tel || "").replace(/[^\d+]/g, "");
+      head = `<div class="ccard"><div class="cn">${esc(card.name || "")}</div>`
+        + (card.tel ? `<a class="ctel" href="tel:${tel}">📞 ${esc(card.tel)}</a>` : `<div class="cad">電話の登録なし</div>`)
+        + (card.address ? `<div class="cad">📍 ${esc(card.address)}</div>` : `<div class="cad">住所の登録なし</div>`)
+        + (card.note ? `<div class="cad">📝 ${esc(card.note)}</div>` : "") + `</div>`;
+      const cons = card.contracts || [];
+      tail += cons.length ? `<div class="csec">契約 ${cons.length}件</div><div class="tbl"><table><thead><tr><th>品目</th><th>処分先</th><th>内容</th><th>メモ</th></tr></thead><tbody>`
+        + cons.map((r) => `<tr>${(r || []).map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("") + `</tbody></table></div>` : `<div class="csec">契約の登録なし</div>`;
+      const ph = card.phone || [];
+      if (ph.length) tail += `<div class="csec">最近の電話依頼</div>` + ph.map((x) => `<div class="cad">${esc(x["日"] || "")} ${esc(x["用件"] || "")}(${esc(x["状態"] || "")}) ${esc(x["メモ"] || "")}</div>`).join("");
+      if ((card.others || []).length) tail += `<div class="csec">ほかの候補</div><div class="cad">${card.others.map(esc).join(" / ")}</div>`;
+      box.innerHTML = head + tail; box.hidden = false; rx.classList.add("wide");
+    }
     if (msg.map && msg.map.q) {
       const q = msg.map.q, gm = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
-      box.innerHTML = `<div class="map" id="rxMap"></div><a class="maplink" href="${gm}" target="_blank" rel="noopener">Googleマップで開く ↗</a>`;
+      box.innerHTML = head + `<div class="map" id="rxMap"></div><a class="maplink" href="${gm}" target="_blank" rel="noopener">Googleマップで開く ↗</a>` + tail;
       box.hidden = false; rx.classList.add("wide");
       try {
         const [pt] = await Promise.all([geocode(q), loadLeaflet()]);
@@ -658,6 +680,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
       } catch { const m = $("rxMap"); if (m) m.outerHTML = `<div class="msg">地図を読み込めなかったの。下のリンクで開いてね。</div>`; }
     }
   }
+  window.__stackShow = (m) => show(m);   // 試し用(画面の見た目の確認)
   function hide() { rx.classList.remove("show"); clearInterval(typeTimer); mouthIdle(); setSt("STANDBY", "通信待機中"); }
   $("rxClose").onclick = hide;
   $("stackBtn").onclick = () => { const l = getLog()[0]; if (l) show(l, { voice: true }); else speakAloud("いまは待機中よ。ぼくに質問してね。"); };
@@ -779,15 +802,15 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
         const items = ((await r.json()).items || []).filter((x) => x && x.id);
         let latest = null; const fresh = [];
         for (const x of items) {
-          const m = { id: "b" + x.id, time: (x.time || Date.now() / 1000) * 1000, title: x.title || "", text: x.text || "", data: x.data || null, map: x.map || null, table: x.table || null };
+          const m = { id: "b" + x.id, time: (x.time || Date.now() / 1000) * 1000, title: x.title || "", text: x.text || "", data: x.data || null, map: x.map || null, table: x.table || null, card: x.card || null };
           if (addLog(m)) { fresh.push(m); if (!latest || m.time > latest.time) latest = m; }
-          if ((m.map || m.table) && (!lastViz || m.time > lastViz.time)) lastViz = m;
+          if ((m.map || m.table || m.card) && (!lastViz || m.time > lastViz.time)) lastViz = m;
         }
         // MICで会話を表示している時は、スタック本体の本当の返事を会話の中に入れる(会話カードで上書きして消さない)
         if (!boxFirst && fresh.length) {
           fresh.sort((a, b) => a.time - b.time).forEach((m) => {
             // 図: 会話中なら会話カードに地図・表をつける。会話していない時は図をそのまま大きく出す
-            if (m.map || m.table) { lastViz = m; setTimeout(() => show(current && current.id === "convo" ? { ...current, time: Date.now(), map: null, table: null } : m), 1500); return; }
+            if (m.map || m.table || m.card) { lastViz = m; setTimeout(() => show(current && current.id === "convo" ? { ...current, time: Date.now(), map: null, table: null, card: null } : m), 1500); return; }
             if (m.title === "司令室から") return;               // 司令室から聞いた言葉はもう出している
             if (m.title === "本体") { convoAdd("あなた(本体)", m.text); return; }
             const body = m.title && m.title !== "スタック" ? `【${m.title}】${m.text}` : m.text;
