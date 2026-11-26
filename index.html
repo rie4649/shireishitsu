@@ -437,6 +437,10 @@
   .log-item button.del:active { background: rgba(255,59,78,.3); color: #fff; }
   .log-item .open { font-family: var(--mono); font-size: 10px; color: var(--glow); letter-spacing: .1em; margin-top: 3px; }
   @media (prefers-reduced-motion: reduce) { button.dz.hot { animation: none !important; } }
+  /* VER 7.8: 検索中の演出「テレビが消える」: 画面全体が横一本の線→点になって消える */
+  html.tvoff #app, html.tvoff canvas#bg { animation: tvOff .43s cubic-bezier(.7,0,.9,.4) forwards; transform-origin: 50% 50%; }
+  @keyframes tvOff { 0% { transform: none; filter: none; } 45% { transform: scale(1.02, .006); filter: brightness(5) saturate(0); }
+    80% { transform: scale(.004, .006); filter: brightness(9); } 100% { transform: scale(0, 0); filter: brightness(0); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .rx.crt-on, .rx.crt-off, .crtfx.on *, .crtflash.on { animation: none !important; } }
 </style>
 </head>
@@ -593,7 +597,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "7.7";
+const PAGE_VER = "7.8";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -1931,10 +1935,15 @@ window.stackAnalyzeStop = function(){ const f = window.__anaStop; if (f) f(); };
 window.stackAnalyzeFx = function(opt){
   opt = opt || {};
   const DUR = 2000, HOLD = !!opt.hold, MAX = 60000;
+  // VER 7.8: 3回に1回は別の演出(オレンジの光と数字の嵐 / テレビが消えるようにプシュンと真っ暗)。交互に出す
+  let MODE = opt.mode || "blue";
+  if (!opt.mode) { try { const c = (+(localStorage.getItem("anaCount") || 0)) + 1; localStorage.setItem("anaCount", String(c));
+    if (c % 3 === 0) MODE = (c / 3) % 2 ? "orange" : "off"; } catch {} }
   let held = HOLD;
   const old = document.getElementById("stackAnaBox"); if (old) old.remove();
   const fx = document.createElement("div"); fx.id = "stackAnaBox";
-  fx.style.cssText = "position:fixed;inset:0;z-index:99999;background:#000;transition:opacity .4s ease;cursor:pointer";
+  fx.style.cssText = "position:fixed;inset:0;z-index:99999;background:" + (MODE === "off" ? "transparent" : "#000") + ";transition:opacity .4s ease;cursor:pointer";
+  if (MODE === "off") document.documentElement.classList.add("tvoff");
   fx.innerHTML = '<canvas style="position:absolute;inset:0;width:100%;height:100%"></canvas>';
   document.body.appendChild(fx);
   const cv = fx.firstChild, ctx = cv.getContext("2d"), t0 = performance.now();
@@ -1944,13 +1953,82 @@ window.stackAnalyzeFx = function(opt){
   const pts = Array.from({length:90}, () => { const a = Math.random()*Math.PI*2, r = .5+Math.random()*.6; return {a, r, s:.6+Math.random()}; });
   const lines1 = ["> PARSING QUERY", "> CROSS-REFERENCING DATABASE", "> NEURAL PATTERN MATCH", "> CONFIDENCE 98.7%", "> RESULT LOCKED"];
   const lines2 = ["> DEEP ANALYSIS MODE", "> SCANNING ARCHIVES", "> CORRELATING RECORDS", "> SYNTHESIZING ANSWER", "> STAND BY"];
-  function end(){ if (done) return; done = true; window.__anaStop = null; removeEventListener("resize", size); fx.style.opacity = "0"; setTimeout(() => fx.remove(), 430); }
+  function end(){ if (done) return; done = true; window.__anaStop = null; removeEventListener("resize", size);
+    if (MODE === "off") document.documentElement.classList.remove("tvoff");
+    fx.style.opacity = "0"; setTimeout(() => fx.remove(), 430); }
+  // オレンジ: 横に走る光の帯と、画面いっぱいの数字の羅列
+  const HEX = "0123456789ABCDEF", rnd = (n) => Array.from({length:n}, () => HEX[Math.random()*16|0]).join("");
+  const streaks = Array.from({length:26}, () => ({ y: Math.random(), v: .8 + Math.random()*2.4, w: .15 + Math.random()*.5, x: -Math.random(), h: 1 + Math.random()*3 }));
+  const cols = Array.from({length:40}, () => ({ x: Math.random(), y: Math.random(), v: 4 + Math.random()*10 }));
+  const oLines = ["> OVERRIDE ▸ AMBER CHANNEL", "> BRUTE-FORCE INDEX SCAN", "> 4,096 NODES ONLINE", "> DECRYPTING RECORDS", "> MATCH FOUND"];
+  function drawOrange(now, el, p){
+    const cx = W/2, cy = H*.46;
+    ctx.fillStyle = "rgba(8,2,0,.32)"; ctx.fillRect(0,0,W,H);
+    // 数字の羅列(縦に流れる・ところどころ明るい)
+    ctx.font = "13px ui-monospace,Menlo,Consolas,monospace"; ctx.textAlign = "left";
+    cols.forEach(c => { c.y += c.v/H*16; if (c.y > 1.1) { c.y = -.1; c.x = Math.random(); }
+      for (let i = 0; i < 6; i++) { ctx.fillStyle = i === 0 ? "rgba(255,240,200,.95)" : "rgba(255,140,30," + (.55 - i*.08) + ")";
+        ctx.fillText(rnd(1), c.x*W, (c.y - i*.022)*H); } });
+    // 横一列にザーッと出る数字
+    if (Math.random() < .55) { ctx.fillStyle = "rgba(255,170,60,.75)"; ctx.fillText(rnd(Math.ceil(W/8.2)), 0, Math.random()*H); }
+    // 光の帯がバーっと流れる
+    ctx.globalCompositeOperation = "lighter";
+    streaks.forEach(o => { o.x += o.v*.016*1.4; if (o.x > 1.3) { o.x = -o.w - Math.random()*.4; o.y = Math.random(); }
+      const x0 = o.x*W, x1 = (o.x + o.w)*W, y = o.y*H, g = ctx.createLinearGradient(x0, 0, x1, 0);
+      g.addColorStop(0, "rgba(255,90,0,0)"); g.addColorStop(.8, "rgba(255,150,30,.85)"); g.addColorStop(1, "rgba(255,245,210,1)");
+      ctx.fillStyle = g; ctx.fillRect(x0, y, x1 - x0, o.h); });
+    // 大きな光の帯が画面を横切る(ときどき)
+    const sw = ((now/900) % 1), bx = -W*.3 + sw*W*1.6, bg = ctx.createLinearGradient(bx - W*.25, 0, bx, 0);
+    bg.addColorStop(0, "rgba(255,110,0,0)"); bg.addColorStop(1, "rgba(255,170,60,.35)"); ctx.fillStyle = bg; ctx.fillRect(bx - W*.25, cy - 40, W*.25, 80);
+    ctx.globalCompositeOperation = "source-over";
+    // 真ん中の文字
+    ctx.textAlign = "center"; ctx.shadowColor = "#ff8a1a"; ctx.shadowBlur = 22; ctx.fillStyle = "#fff3e0";
+    ctx.font = "700 " + Math.max(24, Math.min(46, W*.085)) + "px ui-monospace,Menlo,Consolas,monospace";
+    ctx.globalAlpha = Math.random() < .07 ? .3 : 1;
+    ctx.fillText("SEARCHING" + ".".repeat(1 + Math.floor(now/250) % 3), cx, cy);
+    ctx.globalAlpha = 1; ctx.shadowBlur = 8; ctx.font = "13px ui-monospace,Menlo,Consolas,monospace"; ctx.fillStyle = "rgba(255,190,110,.95)";
+    ctx.fillText(rnd(4) + "-" + rnd(4) + "-" + rnd(4) + "  ▸  " + String(Math.floor(el*7.3)).padStart(7, "0") + " RECORDS", cx, cy + 30);
+    ctx.textAlign = "left";
+    const n = Math.min(oLines.length, Math.floor(p*oLines.length*1.15) + 1), lx = Math.max(16, cx - 140);
+    for (let i = 0; i < n; i++) ctx.fillText(oLines[i], lx, cy + 66 + i*17);
+    // 進みぐあいのバー
+    ctx.fillStyle = "rgba(255,140,30,.25)"; ctx.fillRect(cx - 140, cy + 44, 280, 3);
+    ctx.fillStyle = "#ffb347"; ctx.fillRect(cx - 140, cy + 44, 280*((el/1400) % 1), 3);
+    ctx.shadowBlur = 0;
+  }
+  // テレビが消える: 画面がプシュンと横一本の線→点になって真っ暗。暗い中で小さく SIGNAL LOST
+  function drawOff(now, el){
+    const cx = W/2, cy = H/2;
+    if (el < 430) { ctx.clearRect(0,0,W,H); return; }               // 画面そのものが縮む(CSSの tvoff)
+    if (el < 520) fx.style.background = "#000";
+    ctx.fillStyle = "#000"; ctx.fillRect(0,0,W,H);
+    const a = el - 430;
+    if (a < 900) {   // 消えたあとの残り火(真ん中の白い点がゆっくり消える)
+      const k = 1 - a/900, r = 3 + 26*k, g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r*3);
+      g.addColorStop(0, "rgba(255,255,255," + k + ")"); g.addColorStop(.3, "rgba(170,220,255," + k*.6 + ")"); g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r*3, 0, Math.PI*2); ctx.fill();
+      return;
+    }
+    // うっすら走査線と、ときどきノイズ
+    ctx.fillStyle = "rgba(255,255,255,.025)"; for (let y = (now/30) % 4; y < H; y += 4) ctx.fillRect(0, y, W, 1);
+    if (Math.random() < .06) { ctx.fillStyle = "rgba(255,255,255,.08)"; ctx.fillRect(0, Math.random()*H, W, 2 + Math.random()*6); }
+    ctx.textAlign = "center"; ctx.font = "14px ui-monospace,Menlo,Consolas,monospace";
+    ctx.fillStyle = Math.floor(now/600) % 2 ? "rgba(255,70,80,.85)" : "rgba(255,70,80,.25)";
+    ctx.fillText("● SIGNAL LOST", cx, cy - 8);
+    ctx.fillStyle = "rgba(200,210,230,.55)"; ctx.font = "12px ui-monospace,Menlo,Consolas,monospace";
+    ctx.fillText("SILENT SEARCH MODE" + ".".repeat(1 + Math.floor(now/400) % 3), cx, cy + 16);
+  }
   window.__anaStop = () => { held = false; };
   fx.addEventListener("click", end);
   function frame(now){
     if (done) return;
     const el = now - t0, t = held ? (el % DUR)/DUR * .999 : (el >= DUR ? 1 : el/DUR), p = Math.min(1, t), cx = W/2, cy = H*.44, R = Math.min(W, H)*.5;
     if (held && el > MAX) held = false;
+    if (MODE === "orange" || MODE === "off") {
+      if (MODE === "orange") drawOrange(now, el, p); else drawOff(now, el);
+      if (!held && el >= DUR + (MODE === "off" ? 900 : 0)) return end();
+      requestAnimationFrame(frame); return;
+    }
     const lines = el > DUR ? lines2 : lines1;
     ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.fillRect(0,0,W,H);
     // 光の粒が中心に吸いこまれる
