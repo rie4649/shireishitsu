@@ -597,7 +597,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "7.8";
+const PAGE_VER = "7.9";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -1935,10 +1935,10 @@ window.stackAnalyzeStop = function(){ const f = window.__anaStop; if (f) f(); };
 window.stackAnalyzeFx = function(opt){
   opt = opt || {};
   const DUR = 2000, HOLD = !!opt.hold, MAX = 60000;
-  // VER 7.8: 3回に1回は別の演出(オレンジの光と数字の嵐 / テレビが消えるようにプシュンと真っ暗)。交互に出す
+  // VER 7.9: 2回に1回は別の演出(川村さん。7.8は3回に1回)(オレンジの光と数字の嵐 / テレビが消えるようにプシュンと真っ暗)。交互に出す
   let MODE = opt.mode || "blue";
   if (!opt.mode) { try { const c = (+(localStorage.getItem("anaCount") || 0)) + 1; localStorage.setItem("anaCount", String(c));
-    if (c % 3 === 0) MODE = (c / 3) % 2 ? "orange" : "off"; } catch {} }
+    if (c % 2 === 0) MODE = (c / 2) % 2 ? "orange" : "off"; } catch {} }
   let held = HOLD;
   const old = document.getElementById("stackAnaBox"); if (old) old.remove();
   const fx = document.createElement("div"); fx.id = "stackAnaBox";
