@@ -357,6 +357,80 @@
     background: radial-gradient(ellipse at center, rgba(220,238,255,.55), rgba(61,139,255,.18) 45%, transparent 75%); }
   .crtflash.on { animation: crtFlash .8s ease-out both; }
   @keyframes crtFlash { 0%, 30% { opacity: 0; } 42% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* VER 7.6: NOW DANGER(本日の要注意)と、LOG の「消去」ボタン・全文表示 */
+  :root { --red: #ff3b4e; --amber: #ffb547; }
+  .topbar { align-items: center; }
+  button.dz { pointer-events: auto; position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+    font-family: var(--mono); font-size: 13px; letter-spacing: .18em; color: #ffd9dd; padding: 6px 14px 6px 10px;
+    background: linear-gradient(180deg, rgba(90,8,20,.85), rgba(40,2,10,.85)); border: 1px solid var(--red); border-radius: 3px;
+    box-shadow: 0 0 14px rgba(255,59,78,.55), inset 0 0 10px rgba(255,59,78,.25); clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); }
+  button.dz .tri { width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 15px solid var(--red);
+    position: relative; filter: drop-shadow(0 0 6px var(--red)); flex: none; }
+  button.dz .tri::after { content: "!"; position: absolute; left: -3px; top: 2px; font: 700 11px/1 var(--mono); color: #1a0004; }
+  button.dz b { font-weight: 400; color: #fff; text-shadow: 0 0 8px var(--red); }
+  button.dz .n { min-width: 22px; text-align: center; font-size: 13px; color: #fff; background: var(--red); border-radius: 2px; padding: 1px 5px; letter-spacing: 0; }
+  button.dz.hot { animation: dzpulse 1.6s ease-in-out infinite; }
+  button.dz.hot .tri { animation: dzblink 1s steps(2) infinite; }
+  @keyframes dzpulse { 50% { box-shadow: 0 0 26px rgba(255,59,78,.95), inset 0 0 16px rgba(255,59,78,.45); } }
+  @keyframes dzblink { 50% { opacity: .25; } }
+  button.dz.amb { border-color: var(--amber); color: #ffeccc; background: linear-gradient(180deg, rgba(70,40,4,.85), rgba(30,16,2,.85)); box-shadow: 0 0 12px rgba(255,181,71,.45); }
+  button.dz.amb .tri { border-bottom-color: var(--amber); filter: drop-shadow(0 0 6px var(--amber)); }
+  button.dz.amb b { text-shadow: 0 0 8px var(--amber); } button.dz.amb .n { background: var(--amber); color: #1a0f00; }
+  button.dz.clear { border-color: var(--line); color: var(--dim); background: rgba(4,14,36,.7); box-shadow: none; }
+  button.dz.clear .tri { border-bottom-color: var(--dim); filter: none; } button.dz.clear b { color: var(--dim); text-shadow: none; } button.dz.clear .n { background: rgba(120,175,255,.25); color: var(--ice); }
+  @media (max-width: 520px) { button.dz { font-size: 10px; letter-spacing: .06em; padding: 5px 8px 5px 6px; gap: 5px; white-space: nowrap; flex: none; } .topbar .sub { white-space: nowrap; } button.dz .lg { display: none; } }
+
+  .sheet.dzs { align-items: center; padding: 16px; background: rgba(12,0,4,.72); }
+  .dzs .in { width: min(820px, 100%); max-height: 88vh; border-radius: 4px; border: 1px solid var(--red); padding: 0 0 14px;
+    background: repeating-linear-gradient(180deg, rgba(255,80,90,.04) 0 1px, transparent 1px 3px), linear-gradient(180deg, #16030a, #070209 70%);
+    box-shadow: 0 0 40px rgba(255,59,78,.35); }
+  .dzs .stripe { height: 10px; background: repeating-linear-gradient(-45deg, var(--red) 0 12px, #1a0004 12px 24px); opacity: .85; }
+  .dzs .hd { padding: 12px 16px 4px; margin: 0; color: #ffd9dd; }
+  .dzs .hd .tt { font-size: 20px; letter-spacing: .32em; color: #fff; text-shadow: 0 0 14px var(--red); }
+  .dzs .hd .tt small { display: block; font-family: var(--jp); letter-spacing: .1em; font-size: 12px; color: #ffb3bb; text-shadow: none; margin-top: 2px; }
+  .dzs .meta { padding: 0 16px 8px; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: #c98a92; display: flex; gap: 12px; flex-wrap: wrap; }
+  .dzs .meta b { color: #fff; font-weight: 400; }
+  .dzs .days { display: flex; gap: 6px; overflow-x: auto; padding: 0 16px 10px; scrollbar-width: none; }
+  .dzs .days::-webkit-scrollbar { display: none; }
+  .dzs .days button { flex: none; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; padding: 4px 9px; cursor: pointer;
+    background: rgba(40,4,12,.8); color: #ffb3bb; border: 1px solid rgba(255,59,78,.4); border-radius: 2px; }
+  .dzs .days button.on { background: var(--red); color: #fff; border-color: var(--red); }
+  .dzs #dzList { padding: 0 16px; }
+  .dzi { display: flex; align-items: stretch; gap: 0; border: 1px solid rgba(255,59,78,.35); border-left: 4px solid var(--red); margin-bottom: 8px; background: rgba(30,3,10,.7); }
+  .dzi.amber { border-color: rgba(255,181,71,.35); border-left-color: var(--amber); background: rgba(30,18,3,.6); }
+  .dzi .bd { flex: 1; min-width: 0; padding: 9px 12px; cursor: pointer; }
+  .dzi .k { font-family: var(--mono); font-size: 10px; letter-spacing: .16em; color: #ff8d98; }
+  .dzi.amber .k { color: var(--amber); }
+  .dzi .t { font-size: 15px; line-height: 1.55; color: #fff; margin-top: 1px; }
+  .dzi .more { display: none; margin-top: 8px; font-size: 14px; line-height: 1.8; color: #ffe6e8; }
+  .dzi.open .more { display: block; }
+  .dzi .more dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin-top: 8px; font-size: 13px; }
+  .dzi .more dt { color: #ff9aa4; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; padding-top: 2px; }
+  .dzi .more dd { color: #fff; word-break: break-word; }
+  .dzi .more .tbl { overflow-x: auto; max-height: 40vh; margin-top: 8px; border: 1px solid rgba(255,59,78,.3); }
+  .dzi .more table { border-collapse: collapse; font-size: 12px; width: 100%; }
+  .dzi .more th, .dzi .more td { padding: 4px 8px; border-bottom: 1px solid rgba(255,59,78,.18); text-align: left; white-space: nowrap; }
+  .dzi .hint { font-size: 11px; color: #c98a92; margin-top: 3px; }
+  .dzi.open .hint { display: none; }
+  button.del { flex: none; width: 64px; cursor: pointer; border: 0; border-left: 1px solid rgba(255,59,78,.35); background: rgba(255,59,78,.12);
+    color: #ffc4ca; font-family: var(--jp); font-size: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  button.del i { font-style: normal; font-size: 16px; line-height: 1; }
+  button.del:active { background: rgba(255,59,78,.4); }
+  .dzi.amber button.del { border-left-color: rgba(255,181,71,.35); background: rgba(255,181,71,.1); color: #ffe0b0; }
+  .dzs .foot { padding: 8px 16px 0; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12px; color: #c98a92; }
+  .dzs .foot button { background: none; border: 1px solid rgba(255,59,78,.4); color: #ffb3bb; padding: 5px 10px; border-radius: 2px; cursor: pointer; font-family: var(--jp); font-size: 12px; }
+  .dzs .none { text-align: center; padding: 26px 0 18px; font-family: var(--mono); letter-spacing: .3em; color: #8fe3b0; text-shadow: 0 0 12px rgba(80,255,160,.5); }
+  .dzs .none small { display: block; font-family: var(--jp); letter-spacing: .05em; color: #c98a92; text-shadow: none; margin-top: 6px; font-size: 13px; }
+
+  /* LOG: 1行ずつ「消去」ボタン、内容を押すと全文 */
+  .log-item { display: flex; align-items: stretch; padding: 0; cursor: default; }
+  .log-item .bd { flex: 1; min-width: 0; padding: 10px 10px 10px 0; cursor: pointer; }
+  .log-item .bd:active { background: rgba(61,139,255,.12); }
+  .log-item button.del { border-left-color: var(--line); background: rgba(61,139,255,.08); color: var(--glow2); width: 58px; }
+  .log-item button.del:active { background: rgba(255,59,78,.3); color: #fff; }
+  .log-item .open { font-family: var(--mono); font-size: 10px; color: var(--glow); letter-spacing: .1em; margin-top: 3px; }
+  @media (prefers-reduced-motion: reduce) { button.dz.hot, button.dz.hot .tri { animation: none !important; } }
   @media (prefers-reduced-motion: reduce) { .rx.crt-on, .rx.crt-off, .crtfx.on *, .crtflash.on { animation: none !important; } }
 </style>
 </head>
@@ -367,6 +441,7 @@
   <header class="topbar">
     <div><div class="tag"><b>■</b> STACK<span class="long"> // COMMAND ROOM</span></div>
       <div class="sub">LINK ▸ <span id="link">----</span> · VER <span id="ver"></span></div></div>
+    <button class="dz clear" id="dzBtn" type="button" aria-label="本日の要注意を見る"><span class="tri" aria-hidden="true"></span><b>NOW DANGER</b><span class="n" id="dzN">-</span></button>
     <div class="clock"><div class="t" id="clock">--:--:--</div><div id="date">----</div></div>
   </header>
 
@@ -434,9 +509,18 @@
 
 <div class="sheet" id="logSheet" hidden><div class="in">
   <div class="hd"><span>TRANSMISSION LOG</span><button class="ghost" data-close type="button" aria-label="閉じる">×</button></div>
-  <div style="font-size:12px;color:var(--dim);margin:4px 0 6px">履歴を押すと、その1件が消えるよ</div>
+  <div style="font-size:12px;color:var(--dim);margin:4px 0 6px">内容を押すと全文が見られるよ。消したい時は右の「消去」を押してね</div>
   <div id="logList"></div>
   <button class="btn" id="logClear" type="button" style="margin-top:12px;width:100%">ログを消去</button>
+</div></div>
+
+<div class="sheet dzs" id="dzSheet" hidden><div class="in">
+  <div class="stripe"></div>
+  <div class="hd"><span class="tt">⚠ NOW DANGER<small>本日の要注意</small></span><button class="ghost" data-close type="button" aria-label="閉じる">×</button></div>
+  <div class="meta" id="dzMeta"></div>
+  <div class="days" id="dzDays"></div>
+  <div id="dzList"></div>
+  <div class="foot"><span>内容を押すとくわしく見られるよ。済んだら「消去」を押してね</span><button type="button" id="dzBack" hidden>消したものを戻す</button></div>
 </div></div>
 
 <div class="sheet" id="secSheet" hidden><div class="in sx">
@@ -502,7 +586,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "7.5";
+const PAGE_VER = "7.6";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -827,15 +911,25 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   }
   function renderLog() {
     const log = getLog();
-    $("logList").innerHTML = log.length ? log.map((m, i) => `
-      <div class="log-item" data-i="${i}"><div class="w">${esc(timeLabel(m.time))}${m.title ? " ▸ " + esc(m.title) : ""}</div>
-      <div class="s">${esc((m.text || "").slice(0, 80))}${(m.text || "").length > 80 ? "…" : ""}</div></div>`).join("")
+    $("logList").innerHTML = log.length ? log.map((m) => `
+      <div class="log-item" data-id="${esc(m.id)}"><div class="bd" role="button" tabindex="0"><div class="w">${esc(timeLabel(m.time))}${m.title ? " ▸ " + esc(m.title) : ""}</div>
+      <div class="s">${esc((m.text || "").slice(0, 80))}${(m.text || "").length > 80 ? "…" : ""}</div><div class="open">▸ 押すと全文</div></div>
+      <button class="del" type="button" aria-label="この1件を消去"><i>×</i>消去</button></div>`).join("")
       : `<div class="empty">まだ通信はないよ。スタックに質問すると、ここにたまるの。</div>`;
-    // 履歴は押すとその1件が消える(頭脳サーバーから読み直されても戻らないよう、消した印を覚える)
-    $("logList").querySelectorAll(".log-item").forEach((el) => el.onclick = () => {
-      const log = getLog(), m = log[+el.dataset.i]; if (!m) return;
-      const gone = getGone(); gone.push(m.id); store.set("logGone", JSON.stringify(gone.slice(-300)));
-      log.splice(+el.dataset.i, 1); store.set("stackLog", JSON.stringify(log)); renderLog();
+    // VER 7.6: 内容を押すと全文(真ん中の画面に大きく)。消すのは右の「消去」だけ(頭脳サーバーから読み直されても戻らないよう、消した印を覚える)
+    $("logList").querySelectorAll(".log-item").forEach((el) => {
+      const find = () => getLog().find((x) => x.id === el.dataset.id);
+      el.querySelector(".bd").onclick = () => {
+        const m = find(); if (!m) return;
+        closeSheets();
+        if (m.danger) { openDanger(m.danger); return; }
+        show(m);
+      };
+      el.querySelector(".del").onclick = () => {
+        const log = getLog(), i = log.findIndex((x) => x.id === el.dataset.id); if (i < 0) return;
+        const gone = getGone(); gone.push(log[i].id); store.set("logGone", JSON.stringify(gone.slice(-300)));
+        log.splice(i, 1); store.set("stackLog", JSON.stringify(log)); renderLog();
+      };
     });
   }
   function closeSheets() { document.querySelectorAll(".sheet").forEach((x) => x.hidden = true); }
@@ -849,6 +943,85 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     // 消したものが頭脳サーバーから読み直されて戻らないよう、消した時刻より前の受信は表示しない
     store.set("stackLog", "[]"); store.set("logClearedAt", String(Date.now()));
     renderLog(); $("logClear").textContent = "消去したよ";
+  };
+
+  /* ---------------- VER 7.6: NOW DANGER(本日の要注意) ----------------
+     平日の朝、頭脳サーバーがデータの照合だけで作って <通信キー>-danger.json に置く(14日分)。
+     消去はこの端末で覚える(同じ要注意は次の日も消えたまま。中身が変われば新しく出る)。 */
+  let dzData = null, dzDay = null, dzTimer = null;
+  const getDzGone = () => { try { return JSON.parse(store.get("dzGone") || "[]"); } catch { return []; } };
+  const setDzGone = (g) => store.set("dzGone", JSON.stringify(g.slice(-500)));
+  const todayStr = () => { const j = jst(); return `${j.getFullYear()}-${p2(j.getMonth() + 1)}-${p2(j.getDate())}`; };
+  const dayLabel = (d) => { const [y, m, dd] = d.split("-").map(Number); const w = "日月火水木金土"[new Date(y, m - 1, dd).getDay()]; return `${m}/${dd}(${w})`; };
+  function dzLive(rep) { const g = getDzGone(); return (rep && rep.items || []).filter((x) => !g.includes(x.id)); }
+  function dzButton() {
+    const b = $("dzBtn"), rep = dzData && dzData.days && dzData.days[0];
+    const today = rep && rep.day === todayStr();
+    const live = today ? dzLive(rep) : [];
+    const red = live.filter((x) => x.lv === "red").length;
+    b.classList.toggle("hot", red > 0); b.classList.toggle("amb", !red && live.length > 0); b.classList.toggle("clear", !live.length);
+    $("dzN").textContent = today ? String(live.length) : "-";
+    b.title = today ? `本日の要注意 ${live.length}件` : "本日の要注意(まだ届いていない)";
+  }
+  async function loadDanger(fresh) {
+    clearTimeout(dzTimer);
+    try {
+      const r = await fetch(`${BRAIN_BOX}${TOPIC}-danger.json?t=${Date.now()}`, { cache: "no-store" });
+      if (r.ok) dzData = await r.json();
+    } catch {}
+    dzButton();
+    const rep = dzData && dzData.days && dzData.days[0];
+    // その日はじめて届いた時は、自分から開いて知らせる(1日1回)
+    if (rep && rep.day === todayStr() && store.get("dzSeenDay") !== rep.day && dzLive(rep).length) {
+      store.set("dzSeenDay", rep.day);
+      if (document.querySelectorAll(".sheet:not([hidden])").length === 0) openDanger(rep.day);
+    }
+    if (!$("dzSheet").hidden) renderDanger();
+    dzTimer = setTimeout(loadDanger, 5 * 60000);
+  }
+  function dzItem(x) {
+    const extra = (x.data ? `<dl>${dataRows(x.data)}</dl>` : "")
+      + (x.table && Array.isArray(x.table.cols) ? `<div class="tbl"><table><thead><tr>${x.table.cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>`
+        + (x.table.rows || []).map((r) => `<tr>${(r || []).map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("") + `</tbody></table></div>` : "");
+    return `<div class="dzi ${x.lv === "red" ? "" : "amber"}" data-id="${esc(x.id)}">
+      <div class="bd" role="button" tabindex="0"><div class="k">${x.lv === "red" ? "● DANGER" : "▲ CAUTION"} ▸ ${esc(x.kind || "")}</div>
+      <div class="t">${esc(x.title)}</div><div class="hint">▸ 押すとくわしく</div>
+      <div class="more">${esc(x.text || "")}${extra}</div></div>
+      <button class="del" type="button" aria-label="この要注意を消去"><i>×</i>消去</button></div>`;
+  }
+  function renderDanger() {
+    const days = (dzData && dzData.days) || [];
+    if (!dzDay || !days.some((d) => d.day === dzDay)) dzDay = days[0] && days[0].day;
+    const rep = days.find((d) => d.day === dzDay);
+    $("dzDays").innerHTML = days.map((d) => `<button type="button" data-d="${esc(d.day)}" class="${d.day === dzDay ? "on" : ""}">${d.day === todayStr() ? "TODAY " : ""}${esc(dayLabel(d.day))}</button>`).join("");
+    $("dzDays").querySelectorAll("button").forEach((b) => b.onclick = () => { dzDay = b.dataset.d; renderDanger(); });
+    $("dzDays").hidden = days.length < 2;
+    if (!rep) {
+      $("dzMeta").innerHTML = "";
+      $("dzList").innerHTML = `<div class="none">NO DATA<small>本日の要注意は、平日の朝8時ごろに届くよ</small></div>`;
+      $("dzBack").hidden = true; return;
+    }
+    const all = rep.items || [], live = dzLive(rep), red = live.filter((x) => x.lv === "red").length;
+    const made = rep.made ? timeLabel(rep.made * 1000) : "";
+    $("dzMeta").innerHTML = `<span>DATE <b>${esc(dayLabel(rep.day))}</b></span><span>ALERT <b>${live.length}</b></span><span>DANGER <b>${red}</b></span><span>SCAN <b>${esc(made)}</b></span>`
+      + (rep.src ? `<span>SRC <b>${esc(rep.src)}</b></span>` : "");
+    $("dzList").innerHTML = live.length ? live.map(dzItem).join("")
+      : `<div class="none">ALL CLEAR<small>${all.length ? "全部済んだね。おつかれさま！" : "この日の要注意はなかったよ"}</small></div>`;
+    $("dzBack").hidden = all.length === live.length;
+    $("dzList").querySelectorAll(".dzi").forEach((el) => {
+      el.querySelector(".bd").onclick = () => el.classList.toggle("open");
+      el.querySelector(".del").onclick = () => { const g = getDzGone(); g.push(el.dataset.id); setDzGone(g); renderDanger(); dzButton(); };
+    });
+  }
+  function openDanger(day) {
+    closeKeyboard(); closeSheets();
+    if (day) dzDay = day;
+    renderDanger(); $("dzSheet").hidden = false;
+  }
+  $("dzBtn").onclick = () => { dzDay = null; openDanger(); };
+  $("dzBack").onclick = () => {
+    const rep = ((dzData && dzData.days) || []).find((d) => d.day === dzDay); if (!rep) return;
+    const ids = (rep.items || []).map((x) => x.id); setDzGone(getDzGone().filter((id) => !ids.includes(id))); renderDanger(); dzButton();
   };
   /* ---------------- VER 6.6: ホーム画面に追加 ---------------- */
   let installEvt = null;
@@ -913,7 +1086,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     };
   }
   /* ---------------- 頭脳サーバー(スタック本体の会話)から受け取る ---------------- */
-  let boxFirst = true, boxOk = false, boxTimer = null;
+  let boxFirst = true, boxOk = false, boxTimer = null, dangerFresh = false;
   async function pollBox() {
     clearTimeout(boxTimer);
     if (document.hidden) return;
@@ -923,7 +1096,8 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
         const items = ((await r.json()).items || []).filter((x) => x && x.id);
         let latest = null; const fresh = [];
         for (const x of items) {
-          const m = { id: "b" + x.id, time: (x.time || Date.now() / 1000) * 1000, title: x.title || "", text: x.text || "", data: x.data || null, map: x.map || null, table: x.table || null, card: x.card || null };
+          const m = { id: "b" + x.id, time: (x.time || Date.now() / 1000) * 1000, title: x.title || "", text: x.text || "", data: x.data || null, map: x.map || null, table: x.table || null, card: x.card || null, danger: x.danger || null };
+          if (m.danger) { if (addLog(m)) dangerFresh = true; continue; }   // VER 7.6: 本日の要注意は NOW DANGER の画面で出す
           if (addLog(m)) { fresh.push(m); if (!latest || m.time > latest.time) latest = m; }
           if ((m.map || m.table || m.card) && (!lastViz || m.time > lastViz.time)) lastViz = m;
         }
@@ -943,6 +1117,7 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
           });
         } else if (latest && (!boxFirst || Date.now() - latest.time < 10 * 60000)) show(latest);
         boxFirst = false;
+        if (dangerFresh) { dangerFresh = false; loadDanger(true); }
       }
       boxOk = r.ok || r.status === 404;
     } catch { boxOk = false; }
@@ -1004,9 +1179,10 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     setLink(false);
     catchUp().then(connect);
     pollBox();
+    loadDanger();
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) return;
-      pollBox();
+      pollBox(); loadDanger();
       if (!es || es.readyState === 2) { catchUp(); connect(); }
     });
   }
