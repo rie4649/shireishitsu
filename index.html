@@ -303,6 +303,61 @@
   .quickbar button { white-space: nowrap; font-family: var(--jp); letter-spacing: 0; font-size: 12px; }
   .app { grid-template-rows: auto 1fr auto auto; }
   @media (prefers-reduced-motion: reduce) { .core .ring, .core .ticks, .core .big { animation: none !important; } }
+  /* VER 7.5: 回答画面を大きく(全文が一度に見える)＋ブラウン管テレビの電源ON/OFF演出 */
+  .rx, .rx.wide { width: min(1000px, 100%); }
+  .rx { max-height: 100%; padding: 16px 22px 14px;
+    background:
+      repeating-linear-gradient(180deg, rgba(150,200,255,.045) 0 1px, transparent 1px 3px),
+      linear-gradient(180deg, rgba(8, 24, 58, .9), rgba(3, 10, 28, .93)); }
+  .rx.convo { max-height: 100%; }
+  .rx .say, .rx.convo .say { font-size: clamp(18px, 2.3vw, 26px); line-height: 1.85; }
+  .rx.convo .say { text-shadow: 0 0 12px rgba(120,190,255,.45); }
+  .rx h2 { font-size: clamp(16px, 1.6vw, 20px); }
+  .rx.convo dl { max-height: 13vh; }
+  .app.rxon .fx { opacity: .12; }
+  @media (max-width: 520px) { .rx { padding: 12px 14px; } .rx .say, .rx.convo .say { font-size: 18px; line-height: 1.75; } .rx.convo dl { max-height: 11vh; } }
+  .rx.crt-on { animation: crtOn .8s cubic-bezier(.2,.75,.25,1) both; }
+  .rx.crt-off { animation: crtOff .45s cubic-bezier(.6,0,.9,.4) both; }
+  @keyframes crtOn {
+    0%   { opacity: 1; transform: scale(0, .006); filter: brightness(8) saturate(0); }
+    28%  { opacity: 1; transform: scale(1, .006); filter: brightness(7) saturate(0); }
+    50%  { transform: scale(1.01, 1.06); filter: brightness(2.6) contrast(1.4) saturate(.6); }
+    64%  { transform: scale(.995, .97); filter: brightness(1.5) hue-rotate(-8deg); }
+    76%  { transform: translateX(3px) scale(1, 1.01); filter: brightness(1.15); }
+    84%  { transform: translateX(-2px); }
+    100% { opacity: 1; transform: none; filter: none; }
+  }
+  @keyframes crtOff {
+    0%   { opacity: 1; transform: none; filter: none; }
+    45%  { opacity: 1; transform: scale(1, .006); filter: brightness(6) saturate(0); }
+    80%  { opacity: 1; transform: scale(.02, .006); filter: brightness(9) saturate(0); }
+    100% { opacity: 0; transform: scale(0, 0); filter: brightness(9); }
+  }
+  .crtfx { position: fixed; z-index: 6; pointer-events: none; display: none; }
+  .crtfx.on { display: block; }
+  .crtfx .ln { position: absolute; left: 50%; top: 50%; height: 3px; width: 100%; transform: translate(-50%, -50%) scaleX(0);
+    background: linear-gradient(90deg, transparent, #cfe8ff 8%, #fff 50%, #cfe8ff 92%, transparent); border-radius: 2px;
+    box-shadow: 0 0 12px #fff, 0 0 30px #7fb6ff, 0 0 70px #3d8bff; }
+  .crtfx.on .ln { animation: crtLine .8s ease-out both; }
+  .crtfx.off .ln { animation: crtLineOff .45s ease-in both; }
+  @keyframes crtLine { 0% { transform: translate(-50%,-50%) scaleX(0); opacity: 1; } 26% { transform: translate(-50%,-50%) scaleX(1); opacity: 1; }
+    40% { transform: translate(-50%,-50%) scaleX(1) scaleY(2.5); opacity: .9; } 60% { opacity: 0; transform: translate(-50%,-50%) scaleX(1) scaleY(.5); } 100% { opacity: 0; } }
+  @keyframes crtLineOff { 0%, 35% { opacity: 0; transform: translate(-50%,-50%) scaleX(1); } 45% { opacity: 1; transform: translate(-50%,-50%) scaleX(1); }
+    82% { opacity: 1; transform: translate(-50%,-50%) scaleX(.02); } 100% { opacity: 0; transform: translate(-50%,-50%) scaleX(0); } }
+  .crtfx .nz { position: absolute; inset: 0; opacity: 0; mix-blend-mode: screen; border-radius: 6px; overflow: hidden;
+    background: repeating-linear-gradient(180deg, rgba(200,230,255,.22) 0 1px, transparent 1px 3px); }
+  .crtfx .nz canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .55; }
+  .crtfx .nz::after { content: ""; position: absolute; left: 0; right: 0; height: 22%; top: -22%;
+    background: linear-gradient(180deg, transparent, rgba(160,210,255,.28), transparent); }
+  .crtfx.on:not(.off) .nz { animation: crtNoise 1.15s linear both; }
+  .crtfx.on:not(.off) .nz::after { animation: crtRoll 1.1s linear .3s both; }
+  @keyframes crtNoise { 0%, 24% { opacity: 0; } 32% { opacity: 1; } 60% { opacity: .7; } 100% { opacity: 0; } }
+  @keyframes crtRoll { to { top: 110%; } }
+  .crtflash { position: fixed; inset: 0; z-index: 5; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse at center, rgba(220,238,255,.55), rgba(61,139,255,.18) 45%, transparent 75%); }
+  .crtflash.on { animation: crtFlash .8s ease-out both; }
+  @keyframes crtFlash { 0%, 30% { opacity: 0; } 42% { opacity: 1; } 100% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .rx.crt-on, .rx.crt-off, .crtfx.on *, .crtflash.on { animation: none !important; } }
 </style>
 </head>
 <body>
@@ -440,11 +495,14 @@
   <div class="note" id="setNote"></div>
 </div></div>
 
+<div class="crtflash" id="crtFlash" aria-hidden="true"></div>
+<div class="crtfx" id="crtFx" aria-hidden="true"><div class="nz"><canvas id="crtNz" width="160" height="90"></canvas></div><i class="ln"></i></div>
+
 <div class="gate" id="gate"><div class="box" id="gateBox"></div></div>
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "7.4";
+const PAGE_VER = "7.5";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -612,16 +670,22 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     const dl = $("rxData"); dl.innerHTML = dataRows(msg.data); dl.hidden = !dl.innerHTML;
     renderViz(msg);
     const say = $("rxSay"); say.classList.remove("done"); say.textContent = "";
+    // VER 7.5: 画面が開く時と、スタックの答えが届いた時はブラウン管テレビの電源ON演出
+    const wasOpen = rx.classList.contains("show") && !rx.classList.contains("crt-off");
+    const tv = !wasOpen || /^(スタック|司令室)[：:]/.test(msg.text || "") || msg.id !== "convo";
+    rx.classList.remove("crt-off"); clearTimeout(crtOffT);
     rx.classList.add("show");
+    if (tv) crtOn();
     window.__bgPulse && window.__bgPulse();
     setSt("RECEIVING", "受信中");
     const text = msg.text || "";
-    let i = 0;
+    let i = tv && !CRT_REDUCE ? -9 : 0;   // 演出が終わってから文字を打ち始める
     typeTimer = setInterval(() => {
+      if (i < 0) { i++; return; }
       i++; say.textContent = text.slice(0, i);
       setMouth(!/[、。！？…\s]/.test(text[i - 1] || "") && i % 2 === 0);
       if (i >= text.length) { clearInterval(typeTimer); mouthIdle(); say.classList.add("done"); setSt("STANDBY", "通信待機中"); }
-    }, 55);
+    }, Math.max(22, Math.min(55, Math.round(4500 / Math.max(1, text.length)))));   // VER 7.5: 長い答えも約4.5秒で全部出す
     if (opts.voice) speakAloud(text);
     const bar = $("rxBar");
     bar.style.transition = "none"; bar.style.transform = "scaleX(1)";
@@ -703,7 +767,42 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     }
   }
   window.__stackShow = (m) => show(m);   // 試し用(画面の見た目の確認)
-  function hide() { rx.classList.remove("show"); clearInterval(typeTimer); mouthIdle(); setSt("STANDBY", "通信待機中"); }
+  /* ---------------- VER 7.5: ブラウン管テレビの電源ON/OFF ---------------- */
+  const CRT_REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let crtOffT = null, crtFxT = null, crtNzRaf = 0;
+  function crtPlace() {
+    const r = rx.getBoundingClientRect(), fx = $("crtFx");
+    Object.assign(fx.style, { left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px" });
+    return fx;
+  }
+  function crtNoise(ms) {
+    const c = $("crtNz"), g = c.getContext("2d"), img = g.createImageData(c.width, c.height), end = performance.now() + ms;
+    cancelAnimationFrame(crtNzRaf);
+    const step = () => {
+      const d = img.data;
+      for (let k = 0; k < d.length; k += 4) { const v = Math.random() * 255 | 0; d[k] = v * .7; d[k + 1] = v * .85; d[k + 2] = v; d[k + 3] = Math.random() < .5 ? 255 : 0; }
+      g.putImageData(img, 0, 0);
+      if (performance.now() < end) crtNzRaf = requestAnimationFrame(step);
+    };
+    step();
+  }
+  function crtRestart(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  function crtOn() {
+    if (CRT_REDUCE) return;
+    rx.classList.remove("crt-on"); void rx.offsetWidth;
+    const fx = crtPlace(); fx.classList.remove("off");
+    crtRestart(rx, "crt-on"); crtRestart(fx, "on"); crtRestart($("crtFlash"), "on");
+    crtNoise(1150);
+    clearTimeout(crtFxT); crtFxT = setTimeout(() => { fx.classList.remove("on"); rx.classList.remove("crt-on"); $("crtFlash").classList.remove("on"); }, 1250);
+  }
+  function hide() {
+    clearInterval(typeTimer); mouthIdle(); setSt("STANDBY", "通信待機中");
+    if (CRT_REDUCE || !rx.classList.contains("show")) { rx.classList.remove("show"); return; }
+    rx.classList.remove("crt-on"); const fx = crtPlace(); fx.classList.remove("on");
+    crtRestart(rx, "crt-off"); fx.classList.add("on", "off");
+    clearTimeout(crtFxT); clearTimeout(crtOffT);
+    crtOffT = setTimeout(() => { rx.classList.remove("show", "crt-off"); fx.classList.remove("on", "off"); }, 460);
+  }
   $("rxClose").onclick = hide;
   $("stackBtn").onclick = () => { const l = getLog()[0]; if (l) show(l, { voice: true }); else speakAloud("いまは待機中よ。ぼくに質問してね。"); };
 
