@@ -444,7 +444,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "7.3";
+const PAGE_VER = "7.4";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -567,7 +567,9 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
   const TANKA_URL = "https://rie4649.github.io/tanka-kanri/";
   // VER 7.3: マニフェストの話はマニフェスト台帳(Googleスプレッドシート)だけ。「台帳」でISO管理が出ていた(川村さん「違うよね」)
   const MANIFEST_URL = "https://docs.google.com/spreadsheets/d/1YVOwV3h15zgwKrwgg9lirI1mN1KF2kUCI5VoD3a-HL8/edit";
+  const EMANI_URL = "https://drive.google.com/drive/folders/1SDlx9tYf9DZKOyO2MZ_uc9shQkcsBchN";
   const APP_LINKS = [
+    { re: /電子|でんし|JWNET|ＪＷＮＥＴ/i, label: "電子マニフェストを開く", url: EMANI_URL, only: true },  // VER 7.4: 電子の話は電子マニフェスト(CSVのフォルダ)
     { re: /マニフェスト|まにふぇすと|交付番号|[AB]票|最終処分日/, label: "マニフェスト台帳を開く", url: MANIFEST_URL, only: true },
     { re: /単価|相場|処分費|処分料|値段|価格|いくら/, label: "単価管理を開く", url: TANKA_URL, only: true },
     { re: /会社|住所|地図|場所|どこ|取引先|引き?取り?先|回収先|電話番号|株|㈱|有限|製作所|工業|商事|商店|工場/, label: "取引先情報を開く", url: CLIENTS_URL },
