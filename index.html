@@ -597,7 +597,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "8.0";
+const PAGE_VER = "8.1";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -740,6 +740,10 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
       const q = msg.q || "";
       hits = APP_LINKS.filter((a) => a.re.test(q));                       // まず質問の言葉で選ぶ
       if (!hits.length) hits = APP_LINKS.filter((a) => a.re.test(msg.text || ""));  // 無ければ今の答えで
+      if (/関根商店|自社|うちの会社/.test(q)) {  // VER 8.1: 関根商店は自分たちの会社(取引先ではない)。会社のことはISO管理(川村さん)
+        const iso = APP_LINKS.find((a) => a.label === "ISO管理を開く");
+        hits = [iso].concat(hits.filter((a) => a.url !== CLIENTS_URL && a !== iso));
+      }
       if (hits.some((a) => a.only)) hits = hits.filter((a) => a.only).slice(0, 1);  // VER 7.1: 単価の質問は単価管理だけ(取引先情報ではない)。VER 7.3: マニフェストも台帳だけ
       hits = hits.slice(0, 2);
     } else if (msg.map) {
