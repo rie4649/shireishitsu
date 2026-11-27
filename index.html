@@ -597,7 +597,7 @@
 
 <script>
 /* ---- 版の自動更新: 新しい版が出ていたら自分で読み直す ---- */
-const PAGE_VER = "7.9";
+const PAGE_VER = "8.0";
 (() => {
   const v = document.getElementById("ver"); if (v) v.textContent = PAGE_VER;
   let busy = false;
@@ -1296,6 +1296,8 @@ const SHOW_SEC = 120;                       // 届いた答えを出しておく
     maybeResearch(text);
     try {
       askSt("▸ スタックに送信中…(考えるのに少しかかるよ)");
+      /* VER 8.0: 寝ているスタック本体へ「起きて」の合図(無料の中継 ntfy.sh 経由。本体は待機中この合図だけを待っている) */
+      try { fetch(RELAY + TOPIC + "-wake", { method: "POST", body: "wake" }).catch(() => {}); } catch {}
       let j = await askOnce(text);
       if (!j.ok && j.reason === "sleep") {
         askSt("▸ スタックを起こしてるよ(スマホから声をかけるね)");
